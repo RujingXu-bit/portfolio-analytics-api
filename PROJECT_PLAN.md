@@ -1,0 +1,513 @@
+# AI-Powered Portfolio Analytics API：项目总计划
+
+> 本文件是项目范围、任务依赖、优先级和进度的唯一权威来源。执行任何 Task 前先阅读根目录 `AGENTS.md`。只有达到任务验收标准后才能勾选完成。
+
+## 1. 项目概览
+
+### 最终目标
+
+构建一个求职展示级的投资组合分析后端。用户可以创建投资组合、记录交易并获得基于市场数据的可解释金融指标；系统可以选择性调用 LLM，将确定性计算结果转化为风险摘要，但不提供明确买卖建议。
+
+### 时间预算
+
+- 基准周期：5周。
+- 工作节奏：每周5天，每天4–5小时。
+- 总预算：100–125小时。
+- 缓冲：计划内保留约5个工作日的集成和排错空间。
+
+### 当前状态
+
+- 项目阶段：Week 1 实施中。
+- 当前优先任务：`W1.2`。
+- 当前阻塞：无。
+- V1目标版本：`v1.0.0`。
+
+## 2. 产品范围
+
+### V1必须完成（Must）
+
+- 用户注册、登录和 JWT 身份认证。
+- Portfolio 创建与查询。
+- BUY、SELL、DEPOSIT、WITHDRAWAL 交易记录。
+- PostgreSQL 持久化和 Alembic migration。
+- Fake Market Data Provider 和一个真实 Provider。
+- 简单收益率、年化波动率、最大回撤、Sharpe Ratio。
+- Redis 市场数据缓存。
+- 外部调用超时、有限重试和可解释降级。
+- 结构化指标响应及 methodology。
+- LLM 风险摘要和确定性回退摘要。
+- 单元测试、集成测试、CI、Docker Compose 和完整 README。
+
+### 时间充足再完成（Should）
+
+- 第二个真实市场数据 Provider。
+- 旧缓存 `stale` 降级策略。
+- API 入口限流。
+- AnalysisSnapshot 历史查询。
+- 轻量负载测试和缓存效果对比。
+
+### V1明确不做（Won't）
+
+- 股票价格或涨跌趋势预测。
+- 自动交易和明确买卖建议。
+- 完整 Web 或移动端前端。
+- 银行 Open Banking 接入。
+- 复杂税务、会计或多币种自动换汇。
+- 微服务拆分、Kafka、Kubernetes。
+- 生产级高可用云部署。
+
+## 3. 目标架构
+
+```text
+Client / Swagger
+       |
+    FastAPI
+       |
+Application Services ---- Auth / Ownership
+   |          |             |
+Domain     Repository    Insight Generator
+Analytics      |          |          |
+   |       PostgreSQL   Rules       LLM
+   |
+MarketDataProvider ---- Redis Cache
+   |          |
+ Fake     Real Provider
+```
+
+核心原则：金融数值由可测试的确定性代码计算；LLM 只解释结构化结果；外部服务失败不破坏核心数据与分析流程。
+
+## 4. 五周执行计划
+
+### Week 1：工程骨架与金融引擎（20–25小时）
+
+#### [x] W1.1 初始化工程骨架与统一命令（4–5h）
+
+依赖：无。
+
+工作内容：
+
+- 使用 uv 初始化应用项目，固定 Python 版本。
+- 建立 `src` layout 和测试目录。
+- 配置 `pyproject.toml`、Ruff、mypy、pytest 和 coverage。
+- 创建 `Makefile`，至少提供 install、dev、test、lint、format、typecheck、check。
+- 创建最小 FastAPI 应用和 health endpoint。
+- 创建最小 GitHub Actions 工作流，先运行静态检查和单元测试。
+
+验收标准：
+
+- 新环境可通过文档中的统一命令安装依赖。
+- FastAPI health endpoint 可访问。
+- Ruff、mypy 和空测试套件可以成功运行。
+- `uv.lock` 已生成并纳入版本控制。
+
+#### [ ] W1.2 定义领域类型和金融口径（3–4h）
+
+依赖：W1.1。
+
+工作内容：
+
+- 定义 `PriceBar`、领域 `Transaction`、`PortfolioAnalytics`。
+- 定义交易类型枚举。
+- 确认 adjusted close、简单收益率、252年化周期和无风险利率配置方式。
+- 建立 methodology 输出结构。
+
+验收标准：
+
+- 类型通过 mypy。
+- 金融假设写入文档和测试 fixture 说明。
+- 领域类型不依赖 FastAPI、SQLAlchemy、Pandas 或具体 Provider。
+
+#### [ ] W1.3 实现核心金融指标（8–10h）
+
+依赖：W1.2。
+
+工作内容：
+
+- 实现简单收益率。
+- 实现年化波动率。
+- 实现最大回撤。
+- 实现 Sharpe Ratio。
+- 明确数据不足、零波动和非法价格的行为。
+
+验收标准：
+
+- 使用可人工复核的小型序列验证结果。
+- 覆盖空数据、单点、价格不变、持续下跌、缺失日期和重复日期。
+- 计算函数无网络、数据库和系统当前时间依赖。
+
+#### [ ] W1.4 完成内存垂直切片（4–6h）
+
+依赖：W1.3。
+
+工作内容：
+
+- 定义 `MarketDataProvider` 协议。
+- 实现 `FakeMarketDataProvider`。
+- 实现内存 Repository。
+- 建立临时 Portfolio 创建和 analytics API。
+- 使用 `httpx.AsyncClient + ASGITransport` 编写 API 测试。
+
+验收标准：
+
+- 固定交易与价格数据可以通过 API 返回四项指标和 methodology。
+- 单元测试完全离线且结果稳定。
+- 路由不直接执行金融算法。
+
+### Week 2：PostgreSQL与交易业务（20–25小时）
+
+#### [ ] W2.1 建立本地基础设施（3–4h）
+
+依赖：W1.1。
+
+工作内容：
+
+- 创建 Docker Compose，包含 PostgreSQL 16 和 Redis 7。
+- 扩展 Makefile：infra-up、infra-down、infra-logs。
+- 创建 `.env.example`，区分开发与测试配置。
+- 加入服务健康检查。
+
+验收标准：
+
+- 一条统一命令可启动基础设施。
+- 服务健康状态可验证。
+- 仓库不包含真实凭据。
+
+#### [ ] W2.2 设计数据库模型与首次迁移（6–7h）
+
+依赖：W2.1、W1.2。
+
+工作内容：
+
+- 建立 User、Portfolio、Asset、Transaction 和 AnalysisSnapshot 模型。
+- 为金额、价格、数量和费用选择明确的 NUMERIC 精度。
+- 添加所有权、唯一性、外键和必要索引。
+- 配置 Alembic 并生成首次 migration。
+
+验收标准：
+
+- 空数据库可升级至最新 schema。
+- ORM模型与migration一致。
+- 金额字段没有使用浮点数据库类型。
+
+#### [ ] W2.3 实现 Repository 与交易规则（6–8h）
+
+依赖：W2.2。
+
+工作内容：
+
+- 实现 PostgreSQL Repository。
+- 实现交易创建、查询和幂等处理。
+- 根据交易流水派生持仓。
+- 定义非法交易行为，例如卖出超过持仓。
+
+验收标准：
+
+- Repository 集成测试通过。
+- 重复 `external_id` 不会重复记账。
+- 测试不依赖执行顺序并可自动清理。
+
+#### [ ] W2.4 完成持久化交易垂直切片（5–6h）
+
+依赖：W2.3、W1.4。
+
+工作内容：
+
+- 实现 Portfolio 创建与查询。
+- 实现 Transaction 创建与查询。
+- 将 analytics 用例切换到数据库 Repository。
+- 统一验证错误和领域错误的 HTTP 映射。
+
+验收标准：
+
+- 以下接口完成并有集成测试：
+  - `POST /portfolios`
+  - `GET /portfolios/{id}`
+  - `POST /portfolios/{id}/transactions`
+  - `GET /portfolios/{id}/transactions`
+  - `GET /portfolios/{id}/analytics`
+- 数据在应用重启后仍然存在。
+
+### Week 3：市场数据、Redis与韧性（20–25小时）
+
+#### [ ] W3.1 实现第一个真实 Provider（6–8h）
+
+依赖：W1.4。
+
+工作内容：
+
+- 实现 YFinance Provider 或在任务开始时记录选择其他 Provider 的理由。
+- 标准化为内部 `PriceBar`。
+- 处理 adjusted close、时区、重复日期、空数据和无效 symbol。
+- 将阻塞 SDK 调用移出 event loop。
+
+验收标准：
+
+- 应用服务不依赖供应商响应或 DataFrame。
+- Provider contract test 可手动运行。
+- 普通单元测试和 CI 不访问真实网络。
+
+#### [ ] W3.2 实现Redis缓存（5–6h）
+
+依赖：W2.1、W3.1。
+
+工作内容：
+
+- 设计带版本的缓存键。
+- 为报价、未闭市数据和历史数据设置不同 TTL。
+- 记录 cache hit/miss。
+- 测试序列化、过期和缓存旁路。
+
+验收标准：
+
+- 相同查询在 TTL 内不重复请求 Provider。
+- 缓存内容可正确还原为内部类型。
+- Redis 失效时可以明确报错或安全回退，不返回损坏数据。
+
+#### [ ] W3.3 实现超时、重试与降级（5–6h）
+
+依赖：W3.1、W3.2。
+
+工作内容：
+
+- 设置连接和读取超时。
+- 只对适合重试的错误进行有限重试。
+- 映射429、5xx、无效symbol和数据不足。
+- 可行时实现旧缓存 `stale` 回退。
+
+验收标准：
+
+- 故障通过 Fake Provider 可重复模拟。
+- 重试有次数上限且不存在无限等待。
+- 返回旧数据时 API 明确标记 `stale`。
+
+#### [ ] W3.4 第二Provider决策点（2–4h，可选）
+
+依赖：W3.3。
+
+工作内容：
+
+- 评估剩余时间和 V1 稳定性。
+- 时间允许时实现 Finnhub 或其他 REST Provider。
+- 否则写入 backlog，不影响 V1 完成。
+
+验收标准：
+
+- 若实现，必须通过同一 Provider contract test。
+- Provider 切换通过配置完成，不修改领域或应用逻辑。
+
+### Week 4：认证、权限与AI摘要（20–25小时）
+
+#### [ ] W4.1 实现认证（6–8h）
+
+依赖：W2.2。
+
+工作内容：
+
+- 实现用户注册、登录和密码哈希。
+- 签发并验证 JWT access token。
+- 统一认证错误响应。
+
+验收标准：
+
+- 不存储或记录明文密码和完整token。
+- 注册、成功登录、错误密码和过期token均有测试。
+
+#### [ ] W4.2 实现资源所有权（4–5h）
+
+依赖：W4.1、W2.4。
+
+工作内容：
+
+- 将 Portfolio 和相关资源绑定用户。
+- 在查询、修改和分析流程中执行所有权校验。
+
+验收标准：
+
+- 用户A不能读取或修改用户B的任何投资组合资源。
+- 所有权测试覆盖直接ID猜测场景。
+
+#### [ ] W4.3 实现确定性风险摘要（3–4h）
+
+依赖：W1.3、W2.4。
+
+工作内容：
+
+- 根据波动率、最大回撤、Sharpe Ratio和集中度生成规则摘要。
+- 明确数据不足和方法限制。
+
+验收标准：
+
+- 无任何 LLM 或网络服务时仍能生成稳定摘要。
+- 摘要不包含明确买卖建议。
+
+#### [ ] W4.4 接入一个LLM Provider（6–8h）
+
+依赖：W4.3。
+
+工作内容：
+
+- 定义 `InsightGenerator` 协议。
+- 仅将结构化指标和 methodology 作为输入。
+- 使用结构化输出验证响应。
+- 加入超时、错误回退和结果缓存。
+- AnalysisSnapshot 记录模型与提示词版本。
+
+验收标准：
+
+- LLM失败时返回确定性摘要，核心 analytics 不失败。
+- 输出明确包含信息用途和非投资建议声明。
+- 单元测试使用 Fake Insight Generator，不调用真实服务。
+
+### Week 5：质量、性能与求职交付（20–25小时）
+
+#### [ ] W5.1 可观测性和安全检查（4–5h）
+
+依赖：W4.4。
+
+工作内容：
+
+- 增加结构化日志和 request ID。
+- 检查错误响应与敏感数据脱敏。
+- 记录 Provider latency、cache hit/miss 和错误类别。
+
+验收标准：
+
+- 日志不包含密码、JWT或API Key。
+- 一次请求可以通过 request ID 追踪主要路径。
+
+#### [ ] W5.2 负载测试与实测指标（4–6h）
+
+依赖：W3.3、W5.1。
+
+工作内容：
+
+- 编写 Locust 或 k6 场景。
+- 分别测试冷缓存和热缓存。
+- 记录 P50、P95、吞吐量、错误率和缓存命中率。
+
+验收标准：
+
+- 测试环境、数据量、并发和命令可复现。
+- README只引用实际测得的数字。
+- 不将本地轻量测试描述为生产容量证明。
+
+#### [ ] W5.3 完善CI与干净环境验证（4–5h）
+
+依赖：W2.4、W4.2。
+
+工作内容：
+
+- CI运行 Ruff、format check、mypy、单元测试和集成测试。
+- 使用临时 PostgreSQL 和 Redis 服务。
+- 验证 Docker 镜像或应用容器构建。
+
+验收标准：
+
+- CI不依赖开发者本机状态或真实第三方 API。
+- 从空数据库执行migration并完成集成测试。
+- 失败的质量检查会使CI失败。
+
+#### [ ] W5.4 完成README和架构文档（4–5h）
+
+依赖：W5.2、W5.3。
+
+工作内容：
+
+- 完成启动指南、架构图、API示例和环境变量说明。
+- 记录金融 methodology、缓存策略和错误降级。
+- 写入真实测试覆盖率和性能结果。
+- 完善 `docs/architecture.md` 与 `docs/decisions.md`。
+
+验收标准：
+
+- 新用户只看README即可在干净环境启动项目。
+- 文档没有未实现功能或虚构指标。
+
+#### [ ] W5.5 发布候选版本与演示准备（3–4h）
+
+依赖：W5.1–W5.4。
+
+工作内容：
+
+- 从干净环境完整走一遍安装、migration、启动和测试。
+- 准备三分钟项目演示脚本。
+- 准备核心架构与金融口径面试问答。
+- 修复发布阻塞问题并创建 `v1.0.0` 候选版本。
+
+验收标准：
+
+- 项目级完成定义全部满足。
+- 演示不依赖手工修改数据库或临时补丁。
+- 已知限制在README中明确记录。
+
+## 5. 建议API范围
+
+```http
+POST /auth/register
+POST /auth/login
+
+POST /portfolios
+GET  /portfolios
+GET  /portfolios/{portfolio_id}
+
+POST /portfolios/{portfolio_id}/transactions
+GET  /portfolios/{portfolio_id}/transactions
+
+GET  /portfolios/{portfolio_id}/analytics
+POST /portfolios/{portfolio_id}/insights
+GET  /portfolios/{portfolio_id}/insights
+
+GET  /health
+```
+
+具体响应 schema 在 W1.2 和 W2.4 中确定；不得在没有版本或迁移计划的情况下随意扩张接口。
+
+## 6. 每日工作节奏
+
+每个4–5小时工作日建议按以下方式执行：
+
+1. 20分钟：阅读计划、确认唯一 Task ID 和当日完成标准。
+2. 3小时20分钟：实现、测试和小步重构。
+3. 30分钟：运行静态检查和对应测试，处理失败。
+4. 20分钟：更新文档、计划进度和提交说明。
+
+如果任务未完成，不为了勾选进度而降低验收标准；在进度日志中记录剩余内容，并在下一工作日继续同一 Task。
+
+## 7. 风险与应对
+
+| 风险 | 影响 | 应对 |
+|---|---|---|
+| 异步数据库与测试配置耗时 | Week 2延期 | 先完成Repository最小路径，不提前抽象通用框架 |
+| 第三方数据源不稳定或限额变化 | 集成测试波动 | Fake Provider作为测试基准，真实测试设为可选 |
+| 金融口径不清导致指标返工 | 核心可信度下降 | W1.2先固定methodology并用人工样例验证 |
+| JWT与权限边界遗漏 | 数据泄漏风险 | 为跨用户ID访问建立专门负向测试 |
+| LLM响应不稳定 | 核心API失败 | 规则摘要先行，LLM永远是可回退适配器 |
+| 追求覆盖率或架构展示导致过度设计 | 工期失控 | 以完成定义和V1 Must范围为准 |
+| 过早开发前端 | 后端质量下降 | V1只使用Swagger、curl或API客户端演示 |
+
+## 8. Backlog
+
+以下内容不进入当前关键路径：
+
+- Streamlit或轻量Web演示壳。
+- Finnhub/Twelve Data第二Provider。
+- 基准指数对比和Beta。
+- 资产集中度高级分析。
+- 多币种和外汇换算。
+- CSV交易导入。
+- Refresh token与token撤销。
+- 云端部署与监控面板。
+
+只有V1关键路径稳定，且修改本文件明确调整优先级后，才能开始 Backlog 项目。
+
+## 9. 进度日志
+
+按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
+
+### 2026-07-21
+
+- [x] P0.1 建立 `AGENTS.md`，定义架构、金融、测试、安全和执行规则。
+- [x] P0.2 建立 `PROJECT_PLAN.md`，确定5周范围、依赖和验收标准。
+- [x] W1.1 完成 uv 工程初始化、Python 3.12 固定、src/test 目录、质量工具、统一 Makefile、FastAPI health endpoint 和最小 CI 工作流。
+- 验证：全新临时环境执行 `make install` 成功；`make check` 通过，mypy 检查 12 个源文件无问题，pytest 1 项通过且 coverage 为 100%；`GET /health` 返回 200。
+- 下一步：执行 `W1.2 定义领域类型和金融口径`。
