@@ -291,6 +291,7 @@ def build_portfolio_router(
     @router.get(
         "/{portfolio_id}/analytics",
         response_model=PortfolioAnalyticsResponse,
+        summary="Get Portfolio Analysis",
         responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
     )
     async def get_portfolio_analytics(
