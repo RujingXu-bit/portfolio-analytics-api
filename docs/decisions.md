@@ -1,5 +1,38 @@
 # Architecture Decisions
 
+## 2026-07-22: Cash-flow-adjusted multi-asset valuation
+
+### Context
+
+Analytics must value several securities without using future trades or prices,
+while preserving compatibility with W2 ledgers that allowed BUY records without
+matching DEPOSIT records. Raw changes in portfolio value cannot be reported as
+returns because deposits and withdrawals would look like performance.
+
+### Decision
+
+- Replay aware transaction timestamps in UTC ledger order through each valuation
+  date and ignore transactions after the result `as_of` date.
+- Track cash plus security positions. Treat DEPOSIT and WITHDRAWAL as external
+  flows and trades as internal transfers.
+- Add an implicit external contribution only for the unfunded portion of a BUY;
+  reject a WITHDRAWAL that exceeds cash rather than introducing margin borrowing.
+- Subtract net external flow before calculating each simple period return. Fees
+  always reduce value and performance.
+- Align symbols on the union of observed market dates and carry only previously
+  observed prices forward. Never use a future observation to value an earlier
+  date.
+- Return latest Decimal market values and security weights relative to total
+  portfolio value, including cash, for W4 concentration rules.
+
+### Trade-offs
+
+Carrying a previous close makes portfolios across different trading calendars
+valuatable without fabricating a future price, but it can use an older close for
+an exchange holiday. The methodology exposes this policy. Implicit BUY funding
+supports incomplete imported cash ledgers, while making that contribution
+explicit and neutral to performance instead of silently allowing negative cash.
+
 ## 2026-07-22: Defer the optional second market-data provider
 
 ### Context

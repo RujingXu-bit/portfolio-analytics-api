@@ -8,7 +8,9 @@ from portfolio_analytics_api.domain import (
     InvalidPriceSeriesError,
     PriceBar,
     calculate_annualized_volatility,
+    calculate_compounded_return,
     calculate_max_drawdown,
+    calculate_max_drawdown_from_returns,
     calculate_sharpe_ratio,
     calculate_simple_returns,
 )
@@ -44,6 +46,15 @@ def test_small_series_matches_hand_checked_metrics() -> None:
     )
     assert calculate_max_drawdown(price_bars) == pytest.approx(-0.1)
     assert calculate_sharpe_ratio(returns, Decimal("0")) == pytest.approx(0.0)
+
+
+def test_cash_flow_adjusted_returns_compound_and_draw_down_consistently() -> None:
+    returns = (0.1, -0.1)
+
+    assert calculate_compounded_return(returns) == pytest.approx(-0.01)
+    assert calculate_max_drawdown_from_returns(returns) == pytest.approx(-0.1)
+    assert calculate_compounded_return(()) is None
+    assert calculate_max_drawdown_from_returns(()) == 0.0
 
 
 def test_prices_are_sorted_and_missing_dates_are_not_filled() -> None:

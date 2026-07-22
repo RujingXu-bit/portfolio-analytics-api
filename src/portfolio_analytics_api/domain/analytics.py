@@ -70,6 +70,28 @@ def calculate_sharpe_ratio(
     )
 
 
+def calculate_compounded_return(returns: Sequence[float]) -> float | None:
+    """Compound cash-flow-adjusted period returns into one range return."""
+    if not returns:
+        return None
+    wealth = 1.0
+    for period_return in returns:
+        wealth *= 1.0 + period_return
+    return wealth - 1.0
+
+
+def calculate_max_drawdown_from_returns(returns: Sequence[float]) -> float:
+    """Calculate drawdown from a cash-flow-neutral cumulative wealth index."""
+    wealth = 1.0
+    peak = wealth
+    max_drawdown = 0.0
+    for period_return in returns:
+        wealth *= 1.0 + period_return
+        peak = max(peak, wealth)
+        max_drawdown = min(max_drawdown, wealth / peak - 1.0)
+    return max_drawdown
+
+
 def _validate_and_order(price_bars: Sequence[PriceBar]) -> tuple[PriceBar, ...]:
     ordered_bars = tuple(sorted(price_bars, key=lambda price_bar: price_bar.date))
     seen_dates = set()

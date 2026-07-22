@@ -4,6 +4,7 @@ from uuid import UUID
 
 from portfolio_analytics_api.domain import (
     AnalyticsMethodology,
+    AssetWeight,
     PortfolioAnalytics,
     PriceBar,
     PriceBasis,
@@ -93,6 +94,15 @@ def test_portfolio_analytics_includes_as_of_and_methodology(
         annualized_volatility=0.12,
         max_drawdown=-0.08,
         sharpe_ratio=0.75,
+        portfolio_value=Decimal("1050"),
+        cash_balance=Decimal("50"),
+        asset_weights=(
+            AssetWeight(
+                symbol="AAPL",
+                market_value=Decimal("1000"),
+                weight=Decimal("0.9523809523809523809523809524"),
+            ),
+        ),
         methodology=analytics_methodology,
     )
 
@@ -101,5 +111,8 @@ def test_portfolio_analytics_includes_as_of_and_methodology(
     assert analytics.annualized_volatility == 0.12
     assert analytics.max_drawdown == -0.08
     assert analytics.sharpe_ratio == 0.75
+    assert analytics.portfolio_value == Decimal("1050")
+    assert analytics.cash_balance == Decimal("50")
+    assert analytics.asset_weights[0].symbol == "AAPL"
     assert analytics.methodology is analytics_methodology
     assert analytics.stale is False

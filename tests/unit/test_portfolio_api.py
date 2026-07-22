@@ -126,7 +126,13 @@ async def test_persistent_api_returns_portfolio_transactions_and_metrics() -> No
     assert body["annualized_volatility"] == pytest.approx(0.2 / sqrt(2) * sqrt(252))
     assert body["max_drawdown"] == pytest.approx(-0.1)
     assert body["sharpe_ratio"] == pytest.approx(0.0)
+    assert Decimal(body["portfolio_value"]) == Decimal("198")
+    assert Decimal(body["cash_balance"]) == 0
+    assert body["asset_weights"][0]["symbol"] == "DEMO"
+    assert Decimal(body["asset_weights"][0]["market_value"]) == Decimal("198")
+    assert Decimal(body["asset_weights"][0]["weight"]) == 1
     assert body["methodology"]["price_basis"] == "adjusted_close"
+    assert body["methodology"]["valuation_method"] == ("end_of_day_cash_flow_adjusted")
     assert body["stale"] is False
 
 
@@ -267,8 +273,18 @@ async def test_missing_portfolio_has_stable_not_found_errors() -> None:
 
 
 @pytest.mark.anyio
-async def test_single_symbol_analytics_scope_is_explicit() -> None:
-    async with api_client({}) as client:
+async def test_multi_symbol_analytics_returns_latest_asset_weights() -> None:
+    prices: dict[str, tuple[PriceBar, ...]] = {
+        "DEMO": (
+            PriceBar("DEMO", date(2026, 1, 2), Decimal("100")),
+            PriceBar("DEMO", date(2026, 1, 3), Decimal("110")),
+        ),
+        "OTHER": (
+            PriceBar("OTHER", date(2026, 1, 2), Decimal("100")),
+            PriceBar("OTHER", date(2026, 1, 3), Decimal("90")),
+        ),
+    }
+    async with api_client(prices) as client:
         portfolio_id = await create_portfolio(client)
         await client.post(
             f"/portfolios/{portfolio_id}/transactions", json=buy_transaction()
@@ -282,8 +298,11 @@ async def test_single_symbol_analytics_scope_is_explicit() -> None:
             params={"start_date": "2026-01-01", "end_date": "2026-01-31"},
         )
 
-    assert response.status_code == 422
-    assert response.json()["error"]["code"] == "analytics_unavailable"
+    assert response.status_code == 200
+    assert [weight["symbol"] for weight in response.json()["asset_weights"]] == [
+        "DEMO",
+        "OTHER",
+    ]
 
 
 @pytest.mark.anyio

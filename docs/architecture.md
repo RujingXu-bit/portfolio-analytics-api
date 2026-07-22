@@ -22,9 +22,10 @@ financial metrics or access repository storage directly.
 
 The application layer owns use-case orchestration and transaction boundaries.
 Portfolio and transaction writes use a fresh unit of work. Analytics loads the
-persistent ordered transaction ledger, identifies the current single traded
-symbol, requests a date-bounded price series, and composes the four domain
-metrics into `PortfolioAnalytics`.
+persistent ordered transaction ledger, identifies symbols held or traded in the
+requested interval, requests their date-bounded price series concurrently, and
+composes the cash-flow-adjusted valuation and four domain metrics into
+`PortfolioAnalytics`.
 
 The domain layer contains immutable values and deterministic financial
 functions. It has no FastAPI, database, Pandas, provider, network, system clock,
@@ -60,12 +61,19 @@ ledger, and commits the new row atomically. The domain replay order is
 security positions; DEPOSIT and WITHDRAWAL are recorded but W2 does not enforce
 a cash balance.
 
+The W3.5 valuation engine is a pure domain component. It replays transactions by
+UTC occurrence time, tracks cash and security quantities, values active
+positions only with prices already observed on or before each valuation date,
+and calculates returns after removing external flows. DEPOSIT, WITHDRAWAL, and
+unfunded BUY shortfalls are external flows; BUY and SELL otherwise transfer
+value between cash and securities. Fees reduce performance. The latest security
+weights use total portfolio value, including cash, as their denominator.
+
 ## Current scope
 
 The API persists Portfolio and Transaction resources and exposes creation,
-lookup, ordered transaction listing, and analytics. Data survives process and
-engine recreation. The Week 3 market-data path uses yfinance behind Redis cache,
-bounded retry/deadline handling, stable upstream errors, and explicit stale
-metadata. Analytics still accepts exactly one symbol represented by BUY or SELL
-transactions; W3.5 multi-asset and cash-flow-aware valuation is the next task.
-Authentication and enforced non-null ownership remain W4 work.
+lookup, ordered transaction listing, and multi-asset analytics. Data survives
+process and engine recreation. The Week 3 market-data path uses yfinance behind
+Redis cache, bounded retry/deadline handling, stable upstream errors, and
+explicit stale metadata. Authentication and enforced non-null ownership remain
+W4 work.

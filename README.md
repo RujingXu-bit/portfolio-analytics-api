@@ -4,8 +4,9 @@ A FastAPI backend for deterministic and explainable portfolio analytics.
 
 The current vertical slice persists portfolios and idempotent transaction
 ledgers in PostgreSQL, validates holdings rules, and returns deterministic
-analytics using adjusted-close history from yfinance. Unit and integration
-tests continue to use fixed fake market data and do not require network access.
+multi-asset portfolio analytics using adjusted-close history from yfinance.
+Unit and integration tests continue to use fixed fake market data and do not
+require network access.
 
 ## Financial methodology
 
@@ -87,7 +88,7 @@ no quote endpoint or provider method.
 ## Persistent transaction and analytics slice
 
 The running application uses yfinance and accepts symbols supported by Yahoo
-Finance. Create a single-currency portfolio:
+Finance. Create a single-currency, potentially multi-asset portfolio:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/portfolios \
@@ -124,11 +125,12 @@ curl http://127.0.0.1:8000/portfolios/<id>/transactions
 curl 'http://127.0.0.1:8000/portfolios/<id>/analytics?start_date=2026-01-02&end_date=2026-01-06'
 ```
 
-The response includes period simple return, annualized volatility, maximum
-drawdown, Sharpe ratio, `as_of`, methodology, and a `stale` flag describing
-market-data freshness. Data survives application restarts. The current
-analytics path intentionally supports exactly one traded symbol; multi-asset
-portfolio valuation is a separate planned task.
+The response includes cash-flow-adjusted period simple return, annualized
+volatility, maximum drawdown, Sharpe ratio, exact latest portfolio value, cash
+balance, security weights, `as_of`, methodology, and a `stale` flag describing
+market-data freshness. Multiple traded symbols are valued together. Security
+weights use total portfolio value, including cash, as the denominator. Data
+survives application restarts.
 
 Upstream rate limiting and availability failures return stable 503 errors when
 no stale fallback exists; provider timeouts return 504, malformed upstream data

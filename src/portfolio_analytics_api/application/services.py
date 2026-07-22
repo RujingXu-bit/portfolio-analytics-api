@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -15,16 +16,19 @@ from portfolio_analytics_api.application.ports import (
 )
 from portfolio_analytics_api.domain import (
     AnalyticsMethodology,
+    InvalidPortfolioValuationError,
     InvalidTransactionError,
     Portfolio,
     PortfolioAnalytics,
     Transaction,
     TransactionType,
+    build_portfolio_valuation,
     calculate_annualized_volatility,
-    calculate_max_drawdown,
+    calculate_compounded_return,
+    calculate_max_drawdown_from_returns,
     calculate_sharpe_ratio,
-    calculate_simple_returns,
     derive_positions,
+    required_price_symbols,
     validate_transaction,
 )
 
@@ -112,52 +116,57 @@ class PortfolioAnalyticsService:
                 portfolio_id
             )
 
-        symbols = {
-            transaction.symbol.upper()
-            for transaction in transactions
-            if transaction.transaction_type
-            in {TransactionType.BUY, TransactionType.SELL}
-            and transaction.symbol is not None
-        }
-        if len(symbols) != 1:
+        try:
+            symbols = required_price_symbols(transactions, start_date, end_date)
+        except InvalidPortfolioValuationError as error:
+            raise PortfolioAnalyticsUnavailableError(str(error)) from error
+        if not symbols:
             raise PortfolioAnalyticsUnavailableError(
-                "the current analytics scope requires exactly one traded symbol"
+                "portfolio has no security holdings in the requested range"
             )
-        symbol = next(iter(symbols))
 
-        market_data = await self._market_data_provider.get_price_bars(
-            symbol=symbol,
-            start_date=start_date,
-            end_date=end_date,
+        market_data_results = await asyncio.gather(
+            *(
+                self._market_data_provider.get_price_bars(
+                    symbol=symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+                for symbol in symbols
+            )
         )
-        price_bars = market_data.price_bars
-        if not price_bars:
-            raise PortfolioAnalyticsUnavailableError(
-                f"no price bars fall within the requested range for {symbol}"
+        try:
+            valuation = build_portfolio_valuation(
+                transactions=transactions,
+                price_bars_by_symbol={
+                    symbol: result.price_bars
+                    for symbol, result in zip(symbols, market_data_results, strict=True)
+                },
+                start_date=start_date,
+                end_date=end_date,
             )
+        except InvalidPortfolioValuationError as error:
+            raise PortfolioAnalyticsUnavailableError(str(error)) from error
 
-        ordered_bars = tuple(sorted(price_bars, key=lambda price_bar: price_bar.date))
-        daily_returns = calculate_simple_returns(ordered_bars)
-        simple_return = None
-        if len(ordered_bars) > 1:
-            simple_return = calculate_simple_returns(
-                (ordered_bars[0], ordered_bars[-1])
-            )[0]
+        daily_returns = valuation.period_returns
         return PortfolioAnalytics(
-            as_of=ordered_bars[-1].date,
-            simple_return=simple_return,
+            as_of=valuation.points[-1].date,
+            simple_return=calculate_compounded_return(daily_returns),
             annualized_volatility=calculate_annualized_volatility(
                 daily_returns,
                 self._methodology.annualization_periods,
             ),
-            max_drawdown=calculate_max_drawdown(ordered_bars),
+            max_drawdown=calculate_max_drawdown_from_returns(daily_returns),
             sharpe_ratio=calculate_sharpe_ratio(
                 daily_returns,
                 self._methodology.annual_risk_free_rate,
                 self._methodology.annualization_periods,
             ),
+            portfolio_value=valuation.portfolio_value,
+            cash_balance=valuation.cash_balance,
+            asset_weights=valuation.asset_weights,
             methodology=self._methodology,
-            stale=market_data.stale,
+            stale=any(result.stale for result in market_data_results),
         )
 
 

@@ -125,6 +125,19 @@ class MethodologyResponse(BaseModel):
     price_basis: PriceBasis
     return_type: ReturnType
     annualization_periods: int
+    valuation_method: str
+    cash_flow_policy: str
+    fee_policy: str
+    date_alignment_policy: str
+    transaction_date_timezone: str
+
+
+class AssetWeightResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    symbol: str
+    market_value: Decimal
+    weight: Decimal
 
 
 class PortfolioAnalyticsResponse(BaseModel):
@@ -135,6 +148,9 @@ class PortfolioAnalyticsResponse(BaseModel):
     annualized_volatility: float | None
     max_drawdown: float | None
     sharpe_ratio: float | None
+    portfolio_value: Decimal
+    cash_balance: Decimal
+    asset_weights: list[AssetWeightResponse]
     methodology: MethodologyResponse
     stale: bool
 
