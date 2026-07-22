@@ -51,14 +51,15 @@ async def test_fake_provider_filters_dates_and_orders_fixed_prices() -> None:
         end_date=date(2026, 1, 6),
     )
 
-    assert [price_bar.date for price_bar in result] == [
+    assert [price_bar.date for price_bar in result.price_bars] == [
         date(2026, 1, 5),
         date(2026, 1, 6),
     ]
-    assert [price_bar.adjusted_close for price_bar in result] == [
+    assert [price_bar.adjusted_close for price_bar in result.price_bars] == [
         Decimal("110"),
         Decimal("99"),
     ]
+    assert result.stale is False
 
 
 @pytest.mark.anyio

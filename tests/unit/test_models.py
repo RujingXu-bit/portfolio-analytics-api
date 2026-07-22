@@ -102,3 +102,4 @@ def test_portfolio_analytics_includes_as_of_and_methodology(
     assert analytics.max_drawdown == -0.08
     assert analytics.sharpe_ratio == 0.75
     assert analytics.methodology is analytics_methodology
+    assert analytics.stale is False

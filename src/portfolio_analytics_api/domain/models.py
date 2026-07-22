@@ -75,3 +75,4 @@ class PortfolioAnalytics:
     max_drawdown: float | None
     sharpe_ratio: float | None
     methodology: AnalyticsMethodology
+    stale: bool = False

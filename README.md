@@ -4,8 +4,8 @@ A FastAPI backend for deterministic and explainable portfolio analytics.
 
 The current vertical slice persists portfolios and idempotent transaction
 ledgers in PostgreSQL, validates holdings rules, and returns deterministic
-analytics over fixed fake market data. A real market data adapter remains
-planned Week 3 work.
+analytics using adjusted-close history from yfinance. Unit and integration
+tests continue to use fixed fake market data and do not require network access.
 
 ## Financial methodology
 
@@ -70,15 +70,24 @@ make infra-check
 ```
 
 `make infra-down` stops the services without deleting the PostgreSQL data
-volume. Use `make infra-logs` to follow service logs. An isolated PostgreSQL
-instance for integration tests is available through `make infra-test-up` and
-uses temporary storage; `make infra-test-down` removes only that test
-container.
+volume. Use `make infra-logs` to follow service logs. Isolated PostgreSQL and
+Redis instances for integration tests are available through
+`make infra-test-up`; `make infra-test-down` removes only those test containers.
+
+Market-data cache keys include the schema version, provider, interval, price
+basis, symbol, and inclusive date range. A range ending today or later uses the
+short mutable-data TTL; completed historical ranges use the longer historical
+TTL. Transient provider failures are retried at most three times within a
+12-second operation deadline. After retries are exhausted, a valid retained
+copy may be returned with top-level analytics field `stale: true`; deterministic
+symbol/data errors and damaged cache content never use that fallback. Redis
+failures safely bypass the cache. Quote caching is not exposed because V1 has
+no quote endpoint or provider method.
 
 ## Persistent transaction and analytics slice
 
-The bundled fake provider exposes fixed `DEMO` adjusted-close prices. Create a
-single-currency portfolio:
+The running application uses yfinance and accepts symbols supported by Yahoo
+Finance. Create a single-currency portfolio:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/portfolios \
@@ -100,7 +109,7 @@ curl -X POST http://127.0.0.1:8000/portfolios/<id>/transactions \
     "external_id": "demo-buy-001",
     "transaction_type": "BUY",
     "occurred_at": "2026-01-02T09:00:00Z",
-    "symbol": "DEMO",
+    "symbol": "AAPL",
     "quantity": "2",
     "unit_price": "100",
     "fees": "0"
@@ -116,9 +125,14 @@ curl 'http://127.0.0.1:8000/portfolios/<id>/analytics?start_date=2026-01-02&end_
 ```
 
 The response includes period simple return, annualized volatility, maximum
-drawdown, Sharpe ratio, `as_of`, and methodology. Data survives application
-restarts. The current analytics path intentionally supports exactly one traded
-symbol; multi-asset portfolio valuation is a separate planned task.
+drawdown, Sharpe ratio, `as_of`, methodology, and a `stale` flag describing
+market-data freshness. Data survives application restarts. The current
+analytics path intentionally supports exactly one traded symbol; multi-asset
+portfolio valuation is a separate planned task.
+
+Upstream rate limiting and availability failures return stable 503 errors when
+no stale fallback exists; provider timeouts return 504, malformed upstream data
+returns 502, and invalid or empty symbols retain the existing 422 mapping.
 
 ## Quality commands
 
@@ -130,10 +144,13 @@ make test-cov
 make test-integration
 make test-all
 make check
+make test-contract
 ```
 
 `make test` and `make test-cov` run the offline unit suite. Start the isolated
 test PostgreSQL service before `make test-integration` or `make test-all`.
+`make test-contract` is the only command that enables the optional real
+yfinance network contract test; it is not part of normal CI.
 Database migrations are explicit: run `make db-upgrade` after starting the
 development infrastructure; application startup never applies migrations.
 

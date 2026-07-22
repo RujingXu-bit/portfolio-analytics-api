@@ -7,8 +7,12 @@ from fastapi.responses import JSONResponse
 
 from portfolio_analytics_api.api.routes import build_portfolio_router
 from portfolio_analytics_api.application import (
+    MarketDataInvalidResponseError,
     MarketDataNotFoundError,
     MarketDataProvider,
+    MarketDataRateLimitError,
+    MarketDataTimeoutError,
+    MarketDataUnavailableError,
     PortfolioAlreadyExistsError,
     PortfolioAnalyticsService,
     PortfolioAnalyticsUnavailableError,
@@ -78,6 +82,46 @@ def create_app(
         return _error_response(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             "market_data_not_found",
+            str(error),
+        )
+
+    @app.exception_handler(MarketDataInvalidResponseError)
+    async def market_data_invalid_response_handler(
+        _request: Request, error: MarketDataInvalidResponseError
+    ) -> JSONResponse:
+        return _error_response(
+            status.HTTP_502_BAD_GATEWAY,
+            "market_data_invalid_response",
+            str(error),
+        )
+
+    @app.exception_handler(MarketDataRateLimitError)
+    async def market_data_rate_limit_handler(
+        _request: Request, error: MarketDataRateLimitError
+    ) -> JSONResponse:
+        return _error_response(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "market_data_rate_limited",
+            str(error),
+        )
+
+    @app.exception_handler(MarketDataUnavailableError)
+    async def market_data_unavailable_handler(
+        _request: Request, error: MarketDataUnavailableError
+    ) -> JSONResponse:
+        return _error_response(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "market_data_unavailable",
+            str(error),
+        )
+
+    @app.exception_handler(MarketDataTimeoutError)
+    async def market_data_timeout_handler(
+        _request: Request, error: MarketDataTimeoutError
+    ) -> JSONResponse:
+        return _error_response(
+            status.HTTP_504_GATEWAY_TIMEOUT,
+            "market_data_timeout",
             str(error),
         )
 
