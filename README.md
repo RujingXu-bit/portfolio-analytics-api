@@ -479,9 +479,11 @@ failure stops the job; external provider contracts are excluded.
   not investment advice.
 
 The `v1.1.0` backend adds owner-scoped portfolio/snapshot queries, Redis request
-limits, and reproducible Render/Neon/Upstash configuration. It still has no
-refresh tokens, token revocation, second real market-data provider, frontend,
-automatic trading, multi-currency conversion, or completed public deployment.
+limits, and reproducible Render/Neon/Upstash configuration. The independent
+[Next.js frontend](https://github.com/RujingXu-bit/portfolio-analytics-web) is
+available as a [public demo](https://portfolio-analytics-web-hazel.vercel.app).
+The project still has no refresh tokens, token revocation, second real market-
+data provider, automatic trading, or multi-currency conversion.
 
 ## Project structure
 

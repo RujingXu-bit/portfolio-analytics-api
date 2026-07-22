@@ -11,8 +11,14 @@ Vercel frontend/BFF (F1/D1)
 ```
 
 This is a low-cost portfolio demonstration, not a production SLA or a high-
-availability design. The actual public deployment and end-to-end acceptance
-remain D1.1 work.
+availability design. D1.1 is deployed and accepted at:
+
+- Frontend/BFF: <https://portfolio-analytics-web-hazel.vercel.app>
+- API health: <https://portfolio-analytics-api-ou9p.onrender.com/health>
+
+The accepted topology uses Render Starter and Neon in Frankfurt, with Upstash
+Redis in Ireland. Provider regions reflect the closest available low-cost
+combination and are not an availability guarantee.
 
 ## 1. Create the data services
 
@@ -66,11 +72,27 @@ idempotency, deterministic fallback, and matching cross-user/missing-resource
 
 ```bash
 uv run python -m scripts.demo_flow \
-  --base-url https://portfolio-analytics-api.onrender.com
+  --base-url https://portfolio-analytics-api-ou9p.onrender.com
 ```
 
-The public registration UI must say: “Demo only. Do not enter real financial or
-sensitive information. Demo data may be reset.”
+The public registration UI says: “Demonstration only. Do not enter real
+financial, account, or sensitive information. Demo data may be reset.”
+The operational boundary is unchanged: Do not enter real financial or sensitive
+information, including real account data.
+
+The independent frontend repository also provides a production-only browser
+gate. It creates an isolated synthetic user and verifies the complete workflow,
+secure cookie attributes, token non-disclosure, persisted history, and the three
+required responsive widths:
+
+```bash
+PUBLIC_BASE_URL=https://portfolio-analytics-web-hazel.vercel.app \
+  pnpm test:public
+```
+
+The accepted D1.1 run passed all four browser tests. A single Lighthouse run on
+the landing page measured Performance 99, Accessibility 100, Best Practices
+100, and SEO 100. These are reproducible acceptance observations, not an SLA.
 
 ## 4. Migration and rollback
 
