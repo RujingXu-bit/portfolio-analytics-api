@@ -79,3 +79,7 @@ class TransactionIdempotencyConflictError(ValueError):
             f"external_id {external_id!r} is already used in portfolio {portfolio_id} "
             "with different transaction data"
         )
+
+
+class TransactionImportFormatError(ValueError):
+    """Raised when a CSV document cannot be safely interpreted row by row."""

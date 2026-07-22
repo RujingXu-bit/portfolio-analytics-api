@@ -15,6 +15,7 @@ from portfolio_analytics_api.application.errors import (
     PortfolioNotFoundError,
     RateLimitExceededError,
     TransactionIdempotencyConflictError,
+    TransactionImportFormatError,
 )
 from portfolio_analytics_api.application.ports import (
     AccessTokenService,
@@ -41,6 +42,13 @@ from portfolio_analytics_api.application.services import (
     PortfolioPage,
     PortfolioService,
     TransactionCreation,
+    TransactionImportCandidate,
+    TransactionImportCommit,
+    TransactionImportIssue,
+    TransactionImportPreview,
+    TransactionImportRowResult,
+    TransactionImportRowStatus,
+    TransactionImportService,
     TransactionService,
 )
 
@@ -79,6 +87,14 @@ __all__ = [
     "RateLimitRule",
     "TransactionCreation",
     "TransactionIdempotencyConflictError",
+    "TransactionImportCandidate",
+    "TransactionImportCommit",
+    "TransactionImportFormatError",
+    "TransactionImportIssue",
+    "TransactionImportPreview",
+    "TransactionImportRowResult",
+    "TransactionImportRowStatus",
+    "TransactionImportService",
     "TransactionRepository",
     "TransactionService",
     "UnitOfWork",

@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
+from enum import StrEnum
 from uuid import UUID, uuid4
 
 from portfolio_analytics_api.application.errors import (
@@ -127,6 +128,60 @@ class NewTransaction:
 class TransactionCreation:
     transaction: Transaction
     created: bool
+
+
+@dataclass(frozen=True, slots=True)
+class TransactionImportIssue:
+    code: str
+    message: str
+    field: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class TransactionImportCandidate:
+    row_number: int
+    external_id: str | None
+    new_transaction: NewTransaction | None
+    issues: tuple[TransactionImportIssue, ...] = ()
+
+
+class TransactionImportRowStatus(StrEnum):
+    READY = "ready"
+    REPLAY = "replay"
+    INVALID = "invalid"
+    CREATED = "created"
+    REPLAYED = "replayed"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True, slots=True)
+class TransactionImportRowResult:
+    row_number: int
+    external_id: str | None
+    status: TransactionImportRowStatus
+    transaction: Transaction | None
+    issues: tuple[TransactionImportIssue, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class TransactionImportPreview:
+    rows: tuple[TransactionImportRowResult, ...]
+    total_rows: int
+    ready_rows: int
+    replay_rows: int
+    invalid_rows: int
+
+
+@dataclass(frozen=True, slots=True)
+class TransactionImportCommit:
+    rows: tuple[TransactionImportRowResult, ...]
+    total_rows: int
+    created_rows: int
+    replayed_rows: int
+    failed_rows: int
+
+
+TransactionCsvParser = Callable[[bytes], tuple[TransactionImportCandidate, ...]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -472,6 +527,246 @@ class TransactionService:
             if portfolio is None or portfolio.owner_id != owner_id:
                 raise PortfolioNotFoundError(portfolio_id)
             return await unit_of_work.transactions.list_for_portfolio(portfolio_id)
+
+
+class TransactionImportService:
+    def __init__(
+        self,
+        unit_of_work_factory: UnitOfWorkFactory,
+        transaction_service: TransactionService,
+        parser: TransactionCsvParser,
+        id_factory: Callable[[], UUID] = uuid4,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._transaction_service = transaction_service
+        self._parser = parser
+        self._id_factory = id_factory
+        self._clock = clock
+
+    async def preview(
+        self,
+        owner_id: UUID,
+        portfolio_id: UUID,
+        csv_data: bytes,
+    ) -> TransactionImportPreview:
+        ledger = list(
+            await self._load_owned_ledger(
+                owner_id=owner_id,
+                portfolio_id=portfolio_id,
+            )
+        )
+        candidates = self._parser(csv_data)
+        transactions_by_external_id = {
+            transaction.external_id: transaction for transaction in ledger
+        }
+        rows: list[TransactionImportRowResult] = []
+
+        for candidate in candidates:
+            if candidate.new_transaction is None or candidate.issues:
+                rows.append(
+                    _import_row_result(
+                        candidate,
+                        TransactionImportRowStatus.INVALID,
+                    )
+                )
+                continue
+
+            try:
+                transaction = _build_transaction(
+                    portfolio_id=portfolio_id,
+                    new_transaction=candidate.new_transaction,
+                    transaction_id=self._id_factory(),
+                    created_at=self._clock(),
+                )
+                validate_transaction(transaction)
+            except InvalidTransactionError as error:
+                rows.append(
+                    _import_row_result(
+                        candidate,
+                        TransactionImportRowStatus.INVALID,
+                        issue=TransactionImportIssue(
+                            code="invalid_transaction",
+                            message=str(error),
+                        ),
+                    )
+                )
+                continue
+
+            existing = transactions_by_external_id.get(transaction.external_id)
+            if existing is not None:
+                if _same_transaction_payload(existing, transaction):
+                    rows.append(
+                        _import_row_result(
+                            candidate,
+                            TransactionImportRowStatus.REPLAY,
+                            transaction=existing,
+                        )
+                    )
+                else:
+                    rows.append(
+                        _import_row_result(
+                            candidate,
+                            TransactionImportRowStatus.INVALID,
+                            issue=TransactionImportIssue(
+                                code="idempotency_conflict",
+                                message=(
+                                    "external_id is already used with different "
+                                    "transaction data"
+                                ),
+                                field="external_id",
+                            ),
+                        )
+                    )
+                continue
+
+            try:
+                derive_positions((*ledger, transaction))
+            except InvalidTransactionError as error:
+                rows.append(
+                    _import_row_result(
+                        candidate,
+                        TransactionImportRowStatus.INVALID,
+                        issue=TransactionImportIssue(
+                            code="invalid_ledger",
+                            message=str(error),
+                        ),
+                    )
+                )
+                continue
+
+            ledger.append(transaction)
+            transactions_by_external_id[transaction.external_id] = transaction
+            rows.append(
+                _import_row_result(
+                    candidate,
+                    TransactionImportRowStatus.READY,
+                    transaction=transaction,
+                )
+            )
+
+        return TransactionImportPreview(
+            rows=tuple(rows),
+            total_rows=len(rows),
+            ready_rows=_count_import_status(rows, TransactionImportRowStatus.READY),
+            replay_rows=_count_import_status(rows, TransactionImportRowStatus.REPLAY),
+            invalid_rows=_count_import_status(rows, TransactionImportRowStatus.INVALID),
+        )
+
+    async def commit(
+        self,
+        owner_id: UUID,
+        portfolio_id: UUID,
+        csv_data: bytes,
+    ) -> TransactionImportCommit:
+        await self._assert_owned(owner_id=owner_id, portfolio_id=portfolio_id)
+        candidates = self._parser(csv_data)
+        rows: list[TransactionImportRowResult] = []
+        for candidate in candidates:
+            if candidate.new_transaction is None or candidate.issues:
+                rows.append(
+                    _import_row_result(
+                        candidate,
+                        TransactionImportRowStatus.FAILED,
+                    )
+                )
+                continue
+            try:
+                creation = await self._transaction_service.create(
+                    owner_id,
+                    portfolio_id,
+                    candidate.new_transaction,
+                )
+            except InvalidTransactionError as error:
+                rows.append(
+                    _import_row_result(
+                        candidate,
+                        TransactionImportRowStatus.FAILED,
+                        issue=TransactionImportIssue(
+                            code="invalid_transaction",
+                            message=str(error),
+                        ),
+                    )
+                )
+            except TransactionIdempotencyConflictError:
+                rows.append(
+                    _import_row_result(
+                        candidate,
+                        TransactionImportRowStatus.FAILED,
+                        issue=TransactionImportIssue(
+                            code="idempotency_conflict",
+                            message=(
+                                "external_id is already used with different "
+                                "transaction data"
+                            ),
+                            field="external_id",
+                        ),
+                    )
+                )
+            else:
+                rows.append(
+                    _import_row_result(
+                        candidate,
+                        (
+                            TransactionImportRowStatus.CREATED
+                            if creation.created
+                            else TransactionImportRowStatus.REPLAYED
+                        ),
+                        transaction=creation.transaction,
+                    )
+                )
+
+        return TransactionImportCommit(
+            rows=tuple(rows),
+            total_rows=len(rows),
+            created_rows=_count_import_status(rows, TransactionImportRowStatus.CREATED),
+            replayed_rows=_count_import_status(
+                rows, TransactionImportRowStatus.REPLAYED
+            ),
+            failed_rows=_count_import_status(rows, TransactionImportRowStatus.FAILED),
+        )
+
+    async def _load_owned_ledger(
+        self,
+        *,
+        owner_id: UUID,
+        portfolio_id: UUID,
+    ) -> tuple[Transaction, ...]:
+        async with self._unit_of_work_factory() as unit_of_work:
+            portfolio = await unit_of_work.portfolios.get(portfolio_id)
+            if portfolio is None or portfolio.owner_id != owner_id:
+                raise PortfolioNotFoundError(portfolio_id)
+            return await unit_of_work.transactions.list_for_portfolio(portfolio_id)
+
+    async def _assert_owned(self, *, owner_id: UUID, portfolio_id: UUID) -> None:
+        async with self._unit_of_work_factory() as unit_of_work:
+            portfolio = await unit_of_work.portfolios.get(portfolio_id)
+            if portfolio is None or portfolio.owner_id != owner_id:
+                raise PortfolioNotFoundError(portfolio_id)
+
+
+def _import_row_result(
+    candidate: TransactionImportCandidate,
+    status: TransactionImportRowStatus,
+    *,
+    transaction: Transaction | None = None,
+    issue: TransactionImportIssue | None = None,
+) -> TransactionImportRowResult:
+    issues = candidate.issues + ((issue,) if issue is not None else ())
+    return TransactionImportRowResult(
+        row_number=candidate.row_number,
+        external_id=candidate.external_id,
+        status=status,
+        transaction=transaction,
+        issues=issues,
+    )
+
+
+def _count_import_status(
+    rows: list[TransactionImportRowResult],
+    status: TransactionImportRowStatus,
+) -> int:
+    return sum(row.status is status for row in rows)
 
 
 def _build_transaction(

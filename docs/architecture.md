@@ -68,6 +68,16 @@ requested interval, requests their date-bounded price series concurrently, and
 composes the cash-flow-adjusted valuation and four domain metrics into
 `PortfolioAnalytics`.
 
+The E2.2 CSV input adapter accepts bounded UTF-8 `text/csv`, rejects unknown or
+ambiguous headers, and converts each row through the same `TransactionInput`
+validation into an application candidate. Preview verifies ownership before
+parsing and simulates candidates against the owned ledger without writing.
+Commit processes rows top to bottom by calling the existing
+`TransactionService`; every created row therefore retains the Portfolio lock,
+Decimal normalization, domain/position validation, unique `external_id`, and
+transaction boundary. Expected row failures are returned explicitly while
+successful rows remain committed.
+
 Dashboard query use cases also stay behind repository ports. Portfolio listing
 filters by the authenticated owner before applying newest-first creation order,
 then `limit`/`offset`; snapshot history first verifies ownership of the parent
@@ -117,9 +127,8 @@ a longer-lived shadow copy supports stale fallback. Cache misses call a bounded
 retry decorator, which retries only transient provider failures within one
 operation deadline before reaching the configured adapter. After retries are
 exhausted, the cache decorator may return a valid shadow copy marked stale.
-Corrupt payloads
-and Redis failures are logged and safely bypassed. The async Redis client is
-closed with the database engine during application shutdown.
+Corrupt payloads and Redis failures are logged and safely bypassed. The async
+Redis client is closed with the database engine during application shutdown.
 
 PostgreSQL access is organized behind Portfolio and Transaction repository
 protocols and a small unit-of-work boundary. Creating a transaction locks its

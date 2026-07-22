@@ -2,7 +2,7 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Body, Depends, Query, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from portfolio_analytics_api.api.rate_limit import RateLimitPolicies
@@ -15,6 +15,14 @@ from portfolio_analytics_api.api.schemas import (
     PortfolioInsightResponse,
     PortfolioPageResponse,
     PortfolioResponse,
+    TransactionImportCommitResponse,
+    TransactionImportCommitRowResponse,
+    TransactionImportCommitSummaryResponse,
+    TransactionImportIssueResponse,
+    TransactionImportPreviewResponse,
+    TransactionImportPreviewRowResponse,
+    TransactionImportPreviewSummaryResponse,
+    TransactionImportValueResponse,
     TransactionInput,
     TransactionResponse,
 )
@@ -26,6 +34,7 @@ from portfolio_analytics_api.application import (
     PortfolioInsightService,
     PortfolioService,
     RateLimiter,
+    TransactionImportService,
     TransactionService,
 )
 from portfolio_analytics_api.domain import User
@@ -35,6 +44,7 @@ def build_portfolio_router(
     authentication_service: AuthenticationService,
     portfolio_service: PortfolioService,
     transaction_service: TransactionService,
+    transaction_import_service: TransactionImportService,
     analytics_service: PortfolioAnalyticsService,
     insight_service: PortfolioInsightService,
     rate_limiter: RateLimiter | None = None,
@@ -182,6 +192,102 @@ def build_portfolio_router(
             for transaction in transactions
         ]
 
+    @router.post(
+        "/{portfolio_id}/transactions/import/preview",
+        response_model=TransactionImportPreviewResponse,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def preview_transaction_import(
+        portfolio_id: UUID,
+        csv_data: Annotated[
+            bytes,
+            Body(
+                media_type="text/csv",
+                max_length=1_000_000,
+                description="UTF-8 CSV with at most 500 non-blank transaction rows",
+            ),
+        ],
+        user: Annotated[User, Depends(standard_user)],
+    ) -> TransactionImportPreviewResponse:
+        preview = await transaction_import_service.preview(
+            owner_id=user.id,
+            portfolio_id=portfolio_id,
+            csv_data=csv_data,
+        )
+        return TransactionImportPreviewResponse(
+            rows=[
+                TransactionImportPreviewRowResponse(
+                    row_number=row.row_number,
+                    external_id=row.external_id,
+                    status=row.status,
+                    normalized=(
+                        _transaction_import_value(row.transaction)
+                        if row.transaction is not None
+                        else None
+                    ),
+                    errors=[
+                        TransactionImportIssueResponse.model_validate(issue)
+                        for issue in row.issues
+                    ],
+                )
+                for row in preview.rows
+            ],
+            summary=TransactionImportPreviewSummaryResponse(
+                total_rows=preview.total_rows,
+                ready_rows=preview.ready_rows,
+                replay_rows=preview.replay_rows,
+                invalid_rows=preview.invalid_rows,
+            ),
+        )
+
+    @router.post(
+        "/{portfolio_id}/transactions/import",
+        response_model=TransactionImportCommitResponse,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def commit_transaction_import(
+        portfolio_id: UUID,
+        csv_data: Annotated[
+            bytes,
+            Body(
+                media_type="text/csv",
+                max_length=1_000_000,
+                description="The same UTF-8 CSV previously checked by preview",
+            ),
+        ],
+        user: Annotated[User, Depends(standard_user)],
+    ) -> TransactionImportCommitResponse:
+        result = await transaction_import_service.commit(
+            owner_id=user.id,
+            portfolio_id=portfolio_id,
+            csv_data=csv_data,
+        )
+        return TransactionImportCommitResponse(
+            rows=[
+                TransactionImportCommitRowResponse(
+                    row_number=row.row_number,
+                    external_id=row.external_id,
+                    status=row.status,
+                    transaction=(
+                        TransactionResponse.model_validate(row.transaction)
+                        if row.transaction is not None
+                        else None
+                    ),
+                    errors=[
+                        TransactionImportIssueResponse.model_validate(issue)
+                        for issue in row.issues
+                    ],
+                )
+                for row in result.rows
+            ],
+            summary=TransactionImportCommitSummaryResponse(
+                total_rows=result.total_rows,
+                created_rows=result.created_rows,
+                replayed_rows=result.replayed_rows,
+                failed_rows=result.failed_rows,
+            ),
+        )
+
     @router.get(
         "/{portfolio_id}/analytics",
         response_model=PortfolioAnalyticsResponse,
@@ -248,3 +354,10 @@ def build_portfolio_router(
         )
 
     return router
+
+
+def _transaction_import_value(transaction: object) -> TransactionImportValueResponse:
+    return TransactionImportValueResponse.model_validate(
+        transaction,
+        from_attributes=True,
+    )
