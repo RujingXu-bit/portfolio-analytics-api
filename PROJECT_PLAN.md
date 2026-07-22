@@ -18,9 +18,10 @@
 ### 当前状态
 
 - 项目阶段：Week 5 已完成，`v1.0.0-rc.1` 候选版本已通过验收。
-- 当前优先任务：无；Backlog 仍需由本文件明确重新排期后才能启动。
+- 当前优先任务：`R1.2`，将已验收的候选版本发布为后端正式版 `v1.0.0`。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
+- Post-V1 后端目标版本：`v1.1.0`；独立 Web 前端目标版本：`v1.0.0`。
 
 ## 2. 产品范围
 
@@ -585,26 +586,146 @@ GET  /health
 | 追求覆盖率或架构展示导致过度设计 | 工期失控 | 以完成定义和V1 Must范围为准 |
 | 过早开发前端 | 后端质量下降 | V1只使用Swagger、curl或API客户端演示 |
 
-## 8. Backlog
+## 8. Post-V1 发布与增强计划
 
-以下内容不进入当前关键路径：
+Post-V1 工作按下列门禁顺序执行。每次只处理一个 Task ID；前一任务达到验收
+标准、通过相应验证并更新本文件后，才能开始下一任务。
 
-- Streamlit或轻量Web演示壳。
-- Finnhub/Twelve Data第二Provider。
+### P0：正式发布
+
+#### [x] R1.1 建立 Post-V1 路线图与验收门禁（1–2h）
+
+依赖：W5.R。
+
+验收标准：本文件明确任务顺序、依赖、范围、版本边界和完成条件；不把尚未
+实施或发布的能力写成当前事实。
+
+#### [ ] R1.2 发布后端正式版 v1.0.0（5–7h）
+
+依赖：R1.1。
+
+工作内容：从最新、干净的 `origin/main` 验证候选版本；将 Python 包版本升级
+为 `1.0.0`；同步 changelog、README 和发布状态；运行完整质量、集成、镜像和
+构建门禁；创建并发布 annotated `v1.0.0` tag 和非 prerelease GitHub Release；
+只清理已经合并的功能分支。
+
+验收标准：本地 HEAD 与目标远端一致，全部发布门禁通过，Git tag 和 GitHub
+Release 指向同一已验证提交；未合并分支和版本 tags 未被删除。
+
+### P1：公开全栈演示
+
+#### [ ] E1.1 Portfolio 与 AnalysisSnapshot 查询接口（10–14h）
+
+依赖：R1.2。
+
+工作内容：实现所有者范围内、稳定排序、`limit`/`offset` 分页的
+`GET /portfolios` 与 `GET /portfolios/{id}/insights`；历史响应只读取当前已
+持久化的 snapshot 字段，不新增 migration。
+
+验收标准：分页结构为 `items/total/limit/offset`，Portfolio 按创建时间倒序，
+snapshot 按生成时间倒序；跨用户 ID 访问不泄漏资源存在性；旧 snapshot 可读；
+OpenAPI、README、架构文档、离线测试和 PostgreSQL 集成测试同步通过。
+
+#### [ ] E1.2 公网限流、部署配置与后端 v1.1.0（10–14h）
+
+依赖：E1.1。
+
+工作内容：使用 Redis 固定窗口限制认证、analytics、insights 和普通认证请求；
+返回统一 429 与 `Retry-After`；限流 key 和日志不保存秘密或明文邮箱；Redis
+故障时记录 bypass 并保持核心路径可用；补齐 Render/Neon/Upstash 部署配置，
+完成后发布后端 `v1.1.0`。
+
+验收标准：配置化阈值、边界并发、过期、错误映射、故障降级和脱敏测试通过；
+空库 migration、完整检查、集成测试及非 root 镜像通过；公开部署不配置可选
+LLM 凭据也能返回确定性摘要。
+
+#### [ ] F1.1 独立 Next.js 前端与 BFF 认证边界（10–14h）
+
+依赖：E1.2。
+
+工作内容：在独立 `portfolio-analytics-web` 仓库建立 Node.js 24、Next.js 16、
+TypeScript、pnpm、Tailwind 和测试基线；固定后端 v1.1.0 OpenAPI snapshot；通过
+Route Handlers 代理允许的后端路径，并以 HttpOnly/Secure/SameSite Cookie
+保存短期 access token。
+
+验收标准：浏览器 JavaScript、Local Storage、页面和客户端日志均无法读取
+token；私有响应不缓存，写请求执行同源校验，401 清除会话；前端 lint、类型、
+单元测试和 production build 通过。
+
+#### [ ] F1.2 完整演示闭环 UI（20–28h）
+
+依赖：F1.1。
+
+工作内容：完成英文 Landing、离线 fixture 演示、注册登录、Portfolio 列表/
+创建、条件化交易表单与 ledger、显式日期分析、资产权重、methodology、stale
+状态、风险摘要和 snapshot 历史页面；不实现编辑删除、预测或自动交易。
+
+验收标准：新用户可从注册完整走到历史查询；真实与 fixture 数据明确分离；
+375/768/1440px 布局、键盘路径、错误/空/加载/限流状态及 Playwright 主流程通过。
+
+#### [ ] D1.1 低成本公开部署与公网验收（6–10h）
+
+依赖：F1.2。
+
+工作内容：Vercel 托管前端，Render Starter 运行常驻 Docker API，Neon 托管
+PostgreSQL，Upstash 托管 Redis；同区部署、独立 migration、健康检查和秘密
+配置；公开页面声明仅供演示且数据可能重置。
+
+验收标准：新访客从公开 URL 完成 fixture 浏览和真实注册闭环；日志无秘密；
+部署回滚与数据库迁移步骤可复现；不把第三方免费额度描述为 SLA。
+
+#### [ ] M1.1 视频、字幕与求职作品包装（8–12h）
+
+依赖：D1.1。
+
+工作内容：生成中文操作提示加英文口播/字幕的三分钟全栈脚本和 SRT；准备明确
+标记的离线备用素材；录制 1080p 成片；完善 README 首屏、截图、Live Demo、
+视频、前端仓库、GitHub 元数据和简历链接。
+
+验收标准：成片 2:50–3:05、英文口播约 360–400 词；连续三次彩排通过并验证
+一次 Provider 故障讲解；所有公开链接有效，功能、覆盖率和性能陈述均可复现。
+
+### P2：公开演示稳定后的可选增强
+
+#### [ ] E2.1 第二真实 Market Data Provider（8–12h）
+
+依赖：M1.1。通过现有协议、配置切换和同一 contract test 接入，不改变领域层。
+
+#### [ ] E2.2 CSV 交易导入（12–18h）
+
+依赖：M1.1。先预览和逐行验证，再使用稳定 `external_id` 提交；部分失败可解释，
+不得绕过所有权、Decimal、交易校验或幂等边界。
+
+### Post-V1 范围边界
+
+- 不引入微服务、Kafka、Kubernetes、实时行情、价格预测、自动交易或买卖建议。
+- 不在公开前端存储 JWT，不因前端存在而放松后端所有权校验。
+- 不为演示伪造市场数据新鲜度、生产容量、云平台 SLA 或未运行的测试结果。
+
+## 9. Backlog
+
+以下内容不进入当前 P0/P1 关键路径；已重新排期的第二 Provider、CSV 导入、
+AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准：
+
 - 基准指数对比和Beta。
 - 资产集中度高级分析。
 - 多币种和外汇换算。
-- CSV交易导入。
 - Refresh token与token撤销。
-- 云端部署与监控面板。
+- 生产级高可用部署与监控面板。
 
-只有V1关键路径稳定，且修改本文件明确调整优先级后，才能开始 Backlog 项目。
+只有第 8 节关键路径稳定，且修改本文件明确调整优先级后，才能开始其余 Backlog。
 
-## 9. 进度日志
+## 10. 进度日志
 
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] R1.1 建立 Post-V1 路线图：将正式后端发布、前端所需查询、Redis 限流、
+  独立 Next.js BFF、完整演示 UI、低成本部署、视频包装、第二 Provider 与 CSV
+  导入拆为有依赖和验收标准的独立 Task ID；明确后端 `v1.0.0`/`v1.1.0` 与前端
+  `v1.0.0` 的版本边界，并继续排除微服务、预测和自动交易。验证：任务依赖和
+  Backlog 交叉检查通过，`git diff --check` 通过。下一步：执行 `R1.2`。
 
 - [x] W5.R Week 5 里程碑审查通过。Review baseline：
   `main@f84e1aad4becbe063591e101575b7b728b68376c`；`HEAD == origin/main: yes`；
