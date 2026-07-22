@@ -8,24 +8,44 @@ financial algorithms.
 
 ```text
 FastAPI route
-    -> PortfolioService / TransactionService / PortfolioAnalyticsService
-        -> UnitOfWork -> PortfolioRepository / TransactionRepository
+    -> AuthenticationService / PortfolioService / TransactionService
+       / PortfolioAnalyticsService
+        -> Argon2 PasswordHasher / JWT AccessTokenService
+        -> UnitOfWork -> Portfolio / Transaction / AnalysisSnapshot repositories
                          -> PostgreSQL (SQLAlchemy + asyncpg)
         -> MarketDataProvider protocol
              -> Redis cache decorator
                   -> retry/deadline decorator -> YFinanceMarketDataProvider
         -> deterministic domain analytics functions
+        -> PortfolioInsightService -> deterministic rules
+             -> cached optional InsightGenerator -> DeepSeek
 ```
 
 The API layer validates and serializes HTTP data. It does not calculate
 financial metrics or access repository storage directly.
 
 The application layer owns use-case orchestration and transaction boundaries.
+Authentication normalizes email addresses, moves Argon2 work off the event
+loop, persists only password hashes, and issues time-limited access tokens. JWT
+validation pins the HS256 algorithm and requires subject, issue time, expiry,
+issuer, audience, and access-token type claims. The signing key is supplied only
+through environment settings.
+
 Portfolio and transaction writes use a fresh unit of work. Analytics loads the
 persistent ordered transaction ledger, identifies symbols held or traded in the
 requested interval, requests their date-bounded price series concurrently, and
 composes the cash-flow-adjusted valuation and four domain metrics into
 `PortfolioAnalytics`.
+
+All portfolio routes resolve the current user through one Bearer-token
+dependency, but authorization remains an application-service invariant rather
+than a route-only check. Creation assigns the authenticated user as owner;
+portfolio reads, transaction writes/listing, and analytics compare that owner
+before accessing related data. A missing portfolio and another user's portfolio
+both return the same 404 result to resist direct-ID enumeration. PostgreSQL also
+requires non-null ownership. The W4.2 migration refuses to guess ownership when
+legacy null rows exist, so it never deletes data or silently assigns it to an
+arbitrary user.
 
 The domain layer contains immutable values and deterministic financial
 functions. It has no FastAPI, database, Pandas, provider, network, system clock,
@@ -69,11 +89,40 @@ unfunded BUY shortfalls are external flows; BUY and SELL otherwise transfer
 value between cash and securities. Fees reduce performance. The latest security
 weights use total portfolio value, including cash, as their denominator.
 
+The W4.3 insight path composes `PortfolioAnalyticsService` with a pure,
+versioned deterministic rule function. Routes do not classify risk. The domain
+function receives only `PortfolioAnalytics`, emits factors in a fixed order,
+handles undefined statistics and stale input explicitly, and derives
+concentration from the exact latest weights. Its output carries a fixed
+informational-use disclaimer and is the guaranteed fallback boundary for W4.4.
+
+W4.4 adds an `InsightGenerator` port whose input type contains only structured
+metrics, latest weights, and methodology. The DeepSeek adapter uses the
+OpenAI-compatible chat endpoint in non-thinking JSON mode, an eight-second
+client and application timeout, no SDK retry, and strict Pydantic validation.
+The application keeps the deterministic risk level, factors, limitations, and
+disclaimer authoritative; only a validated narrative and additional
+limitations are merged. Any generator exception is logged by type only and
+returns the rules result. Successful generated output is cached in Redis by a
+SHA-256 digest of the full structured input plus generator, model, and prompt
+version; Redis failures bypass the cache.
+
+Every insight response, including fallback output, creates an
+`AnalysisSnapshot`. The row stores the actual generator/model, prompt or rules
+version, application generation time, exact input-metric summary, methodology,
+and returned summary. API keys remain environment-only and are never part of
+the input, cache value, snapshot, response, or log message.
+
 ## Current scope
 
 The API persists Portfolio and Transaction resources and exposes creation,
 lookup, ordered transaction listing, and multi-asset analytics. Data survives
 process and engine recreation. The Week 3 market-data path uses yfinance behind
 Redis cache, bounded retry/deadline handling, stable upstream errors, and
-explicit stale metadata. Authentication and enforced non-null ownership remain
-W4 work.
+explicit stale metadata. W4.1 provides registration, login, password hashing,
+and access-token validation. W4.2 requires Bearer authentication for every
+portfolio resource and enforces ownership in both application services and the
+database schema.
+W4.3-W4.4 expose owner-scoped risk insights with deterministic
+classification, optional DeepSeek narrative enrichment, Redis result caching,
+strict fallback, and durable analysis provenance.

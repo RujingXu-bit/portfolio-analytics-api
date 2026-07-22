@@ -2,14 +2,73 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from portfolio_analytics_api.domain import Portfolio, Transaction, TransactionType
+from portfolio_analytics_api.application import EmailAlreadyRegisteredError
+from portfolio_analytics_api.domain import (
+    AnalysisSnapshot,
+    Portfolio,
+    Transaction,
+    TransactionType,
+    User,
+)
 from portfolio_analytics_api.infrastructure.database.models import (
+    AnalysisSnapshotRecord,
     AssetRecord,
     PortfolioRecord,
     TransactionRecord,
+    UserRecord,
 )
+
+
+class PostgresAnalysisSnapshotRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, snapshot: AnalysisSnapshot) -> None:
+        self._session.add(
+            AnalysisSnapshotRecord(
+                id=snapshot.id,
+                portfolio_id=snapshot.portfolio_id,
+                as_of=snapshot.as_of,
+                metrics=snapshot.metrics,
+                methodology=snapshot.methodology,
+                summary=snapshot.summary,
+                generator=snapshot.generator,
+                model_name=snapshot.model_name,
+                prompt_version=snapshot.prompt_version,
+                generated_at=snapshot.generated_at,
+            )
+        )
+        await self._session.flush()
+
+
+class PostgresUserRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def add(self, user: User) -> None:
+        self._session.add(
+            UserRecord(
+                id=user.id,
+                email=user.email,
+                password_hash=user.password_hash,
+            )
+        )
+        try:
+            await self._session.flush()
+        except IntegrityError as error:
+            raise EmailAlreadyRegisteredError(user.email) from error
+
+    async def get(self, user_id: UUID) -> User | None:
+        return _user_to_domain(await self._session.get(UserRecord, user_id))
+
+    async def get_by_email(self, email: str) -> User | None:
+        record = await self._session.scalar(
+            select(UserRecord).where(UserRecord.email == email)
+        )
+        return _user_to_domain(record)
 
 
 class PostgresPortfolioRepository:
@@ -145,4 +204,14 @@ def _portfolio_to_domain(record: PortfolioRecord | None) -> Portfolio | None:
         owner_id=record.owner_id,
         name=record.name,
         base_currency=record.base_currency,
+    )
+
+
+def _user_to_domain(record: UserRecord | None) -> User | None:
+    if record is None:
+        return None
+    return User(
+        id=record.id,
+        email=record.email,
+        password_hash=record.password_hash,
     )

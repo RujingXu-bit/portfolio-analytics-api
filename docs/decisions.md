@@ -1,5 +1,130 @@
 # Architecture Decisions
 
+## 2026-07-22: Optional DeepSeek narrative with deterministic authority
+
+### Context
+
+W4.4 requires one LLM provider, structured response validation, bounded failure,
+caching, and snapshot provenance. A DeepSeek API key is available for local use,
+but tests and core analytics must not depend on that credential or an external
+service.
+
+### Decision
+
+- Implement one `InsightGenerator` port and one DeepSeek adapter using the
+  provider's OpenAI-compatible chat endpoint, `deepseek-v4-flash`, non-thinking
+  JSON mode, an eight-second timeout, and no hidden SDK retries.
+- Send only typed structured metrics, latest symbol weights, stale status, and
+  methodology. Never send users, credentials, names, transactions, raw prices,
+  or cash balances.
+- Validate JSON with a strict Pydantic schema and reject extra fields, empty or
+  oversized text, incomplete responses, and transaction/guaranteed-return
+  language. Keep risk level, key factors, core limitations, and disclaimer
+  deterministic.
+- Treat the provider as optional. A missing key disables it; any generator
+  exception returns `risk-rules-v1` without breaking the insight or analytics
+  API.
+- Cache only successful generated results in Redis, keyed by generator/model/
+  prompt identity and a digest of the complete structured input. Persist every
+  returned result as an `AnalysisSnapshot` with actual provenance and inputs.
+
+### Trade-offs
+
+JSON mode guarantees JSON syntax rather than full provider-side schema
+conformance, so application Pydantic validation remains mandatory. Disabling
+SDK retries favors a hard request bound and predictable fallback over masking a
+transient failure. Cache entries avoid repeated cost for identical inputs but
+are invalidated automatically by any model, prompt, methodology, metric, or
+weight change.
+
+## 2026-07-22: Versioned deterministic risk-summary rules
+
+### Context
+
+Risk explanations must remain available without an LLM and must be reproducible
+from backend-computed analytics. The first version needs a simple, interview-
+explainable concentration measure without expanding into sector or correlation
+models.
+
+### Decision
+
+- Implement `risk-rules-v1` as a pure domain function over
+  `PortfolioAnalytics`, with fixed factor order and thresholds documented in
+  `docs/methodology.md`.
+- Classify adverse signals from annualized volatility, maximum drawdown,
+  historical Sharpe ratio, and the largest latest security weight. Never let an
+  LLM compute or replace that risk level.
+- Emit explicit missing-statistic, stale-data, historical-methodology, and
+  concentration-scope limitations plus a fixed non-investment-advice statement.
+- Expose the result through the authenticated, owner-scoped insights route so
+  W4.4 can enrich the explanation while retaining this exact fallback.
+
+### Trade-offs
+
+Threshold rules are coarse and the largest security weight cannot represent
+sector, issuer-family, liquidity, or correlation risk. Those limitations are
+preferable to implying unsupported precision, and the rules remain stable,
+offline, and easy to audit.
+
+## 2026-07-22: Owner-scoped portfolio authorization
+
+### Context
+
+After W4.1 can identify a user, every portfolio and nested transaction or
+analytics operation must reject another user's direct-ID guess. The Week 2
+schema temporarily allowed null owners so its unauthenticated vertical slice
+could be built first.
+
+### Decision
+
+- Require Bearer authentication on all existing `/portfolios` routes and pass
+  the authenticated user ID into each application use case.
+- Assign that ID during portfolio creation and compare it before portfolio
+  reads, locked transaction writes, transaction listing, or analytics loading.
+- Return the same `portfolio_not_found` 404 for absent and foreign-owned IDs so
+  authorization does not reveal resource existence.
+- Make `portfolios.owner_id` non-null in a new Alembic revision. If legacy null
+  rows exist, stop with an actionable migration error instead of deleting them
+  or fabricating an owner.
+
+### Trade-offs
+
+Each service method carries an explicit owner ID, which is slightly more
+verbose but keeps authorization testable below HTTP routing. Existing databases
+with pre-authentication portfolio rows require an operator-approved ownership
+backfill before upgrading; there is no universally correct automatic owner.
+
+## 2026-07-22: Password hashing and access-token boundary
+
+### Context
+
+W4.1 requires durable user registration and login without storing plaintext
+credentials or coupling application services to one security library. Tokens
+must be verifiable and expire predictably, while secrets remain outside version
+control.
+
+### Decision
+
+- Normalize email addresses to lowercase and rely on the existing PostgreSQL
+  unique constraint as the final concurrent-registration guard.
+- Hash passwords with pwdlib's recommended Argon2 hasher in a worker thread;
+  expose passwords to request handling as Pydantic `SecretStr` values and never
+  persist or log them.
+- Issue 30-minute HS256 access tokens containing required subject, issue time,
+  expiry, issuer, audience, and token-type claims. Pin the accepted algorithm
+  during verification.
+- Require a signing key of at least 32 characters from `JWT_SECRET_KEY`; keep
+  only a non-usable replacement marker in `.env.example`.
+- Return the same 401 response for unknown users, wrong passwords, malformed
+  tokens, and expired tokens. Refresh tokens and revocation remain outside V1.
+
+### Trade-offs
+
+Symmetric signing is simple and appropriate for this single deployable modular
+monolith, but all token issuers/verifiers must protect the same secret. Access
+tokens cannot be individually revoked in V1, so their lifetime stays short and
+credential rotation invalidates all outstanding tokens.
+
 ## 2026-07-22: Cash-flow-adjusted multi-asset valuation
 
 ### Context

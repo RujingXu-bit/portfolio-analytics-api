@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 
 from portfolio_analytics_api.application import (
+    AnalysisSnapshotRepository,
     NewTransaction,
     PortfolioNotFoundError,
     PortfolioRepository,
@@ -15,16 +16,20 @@ from portfolio_analytics_api.application import (
     TransactionRepository,
     TransactionService,
     UnitOfWork,
+    UserRepository,
 )
 from portfolio_analytics_api.domain import (
+    AnalysisSnapshot,
     InvalidTransactionError,
     Portfolio,
     Transaction,
     TransactionType,
+    User,
 )
 
 PORTFOLIO_ID = UUID("00000000-0000-0000-0000-000000000001")
 TRANSACTION_ID = UUID("00000000-0000-0000-0000-000000000002")
+OWNER_ID = UUID("00000000-0000-0000-0000-000000000003")
 CREATED_AT = datetime(2026, 1, 20, tzinfo=UTC)
 
 
@@ -70,6 +75,22 @@ class FakeTransactionRepository:
         )
 
 
+class FakeUserRepository:
+    async def add(self, user: User) -> None:
+        raise AssertionError("user repository is not used by transaction tests")
+
+    async def get(self, user_id: UUID) -> User | None:
+        return None
+
+    async def get_by_email(self, email: str) -> User | None:
+        return None
+
+
+class FakeAnalysisSnapshotRepository:
+    async def add(self, snapshot: AnalysisSnapshot) -> None:
+        raise AssertionError("snapshot repository is not used by transaction tests")
+
+
 class FakeUnitOfWork:
     def __init__(
         self,
@@ -77,6 +98,10 @@ class FakeUnitOfWork:
         transactions: list[Transaction],
         commits: list[bool],
     ) -> None:
+        self.users: UserRepository = FakeUserRepository()
+        self.analysis_snapshots: AnalysisSnapshotRepository = (
+            FakeAnalysisSnapshotRepository()
+        )
         self.portfolios: PortfolioRepository = FakePortfolioRepository(portfolios)
         self.transactions: TransactionRepository = FakeTransactionRepository(
             transactions
@@ -104,7 +129,13 @@ class FakeUnitOfWork:
 def service_fixture() -> tuple[
     TransactionService, list[Transaction], list[bool], Callable[[], UnitOfWork]
 ]:
-    portfolios = {PORTFOLIO_ID: Portfolio(PORTFOLIO_ID, "Test")}
+    portfolios = {
+        PORTFOLIO_ID: Portfolio(
+            id=PORTFOLIO_ID,
+            owner_id=OWNER_ID,
+            name="Test",
+        )
+    }
     transactions: list[Transaction] = []
     commits: list[bool] = []
 
@@ -135,7 +166,7 @@ def buy(*, external_id: str = "broker-001", quantity: str = "2") -> NewTransacti
 async def test_create_normalizes_and_commits_transaction() -> None:
     service, transactions, commits, _factory = service_fixture()
 
-    result = await service.create(PORTFOLIO_ID, buy())
+    result = await service.create(OWNER_ID, PORTFOLIO_ID, buy())
 
     assert result.created is True
     assert result.transaction.id == TRANSACTION_ID
@@ -149,8 +180,8 @@ async def test_create_normalizes_and_commits_transaction() -> None:
 async def test_identical_retry_returns_existing_without_second_commit() -> None:
     service, transactions, commits, _factory = service_fixture()
 
-    first = await service.create(PORTFOLIO_ID, buy())
-    second = await service.create(PORTFOLIO_ID, buy())
+    first = await service.create(OWNER_ID, PORTFOLIO_ID, buy())
+    second = await service.create(OWNER_ID, PORTFOLIO_ID, buy())
 
     assert first.created is True
     assert second.created is False
@@ -162,10 +193,10 @@ async def test_identical_retry_returns_existing_without_second_commit() -> None:
 @pytest.mark.anyio
 async def test_same_external_id_with_different_payload_conflicts() -> None:
     service, transactions, _commits, _factory = service_fixture()
-    await service.create(PORTFOLIO_ID, buy())
+    await service.create(OWNER_ID, PORTFOLIO_ID, buy())
 
     with pytest.raises(TransactionIdempotencyConflictError, match="different"):
-        await service.create(PORTFOLIO_ID, buy(quantity="3"))
+        await service.create(OWNER_ID, PORTFOLIO_ID, buy(quantity="3"))
 
     assert len(transactions) == 1
 
@@ -183,7 +214,7 @@ async def test_oversell_is_rejected_without_write() -> None:
     )
 
     with pytest.raises(InvalidTransactionError, match="exceeds available position"):
-        await service.create(PORTFOLIO_ID, sell)
+        await service.create(OWNER_ID, PORTFOLIO_ID, sell)
 
     assert transactions == []
     assert commits == []
@@ -195,4 +226,4 @@ async def test_missing_portfolio_is_reported() -> None:
     service = TransactionService(factory)
 
     with pytest.raises(PortfolioNotFoundError):
-        await service.create(UUID(int=999), buy())
+        await service.create(OWNER_ID, UUID(int=999), buy())

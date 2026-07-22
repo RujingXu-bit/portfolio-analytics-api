@@ -4,8 +4,10 @@ from typing import Self
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from portfolio_analytics_api.infrastructure.database.repositories import (
+    PostgresAnalysisSnapshotRepository,
     PostgresPortfolioRepository,
     PostgresTransactionRepository,
+    PostgresUserRepository,
 )
 from portfolio_analytics_api.infrastructure.database.session import AsyncSessionFactory
 
@@ -14,11 +16,15 @@ class SqlAlchemyUnitOfWork:
     def __init__(self, session_factory: AsyncSessionFactory) -> None:
         self._session_factory = session_factory
         self._session: AsyncSession | None = None
+        self.users: PostgresUserRepository
+        self.analysis_snapshots: PostgresAnalysisSnapshotRepository
         self.portfolios: PostgresPortfolioRepository
         self.transactions: PostgresTransactionRepository
 
     async def __aenter__(self) -> Self:
         self._session = self._session_factory()
+        self.users = PostgresUserRepository(self._session)
+        self.analysis_snapshots = PostgresAnalysisSnapshotRepository(self._session)
         self.portfolios = PostgresPortfolioRepository(self._session)
         self.transactions = PostgresTransactionRepository(self._session)
         return self

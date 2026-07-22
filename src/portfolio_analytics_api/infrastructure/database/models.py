@@ -48,10 +48,10 @@ class PortfolioRecord(Base):
     id: Mapped[UUID] = mapped_column(
         PostgreSQLUUID(as_uuid=True), primary_key=True, default=uuid4
     )
-    owner_id: Mapped[UUID | None] = mapped_column(
+    owner_id: Mapped[UUID] = mapped_column(
         PostgreSQLUUID(as_uuid=True),
         ForeignKey("users.id", ondelete="RESTRICT"),
-        nullable=True,
+        nullable=False,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     base_currency: Mapped[str] = mapped_column(

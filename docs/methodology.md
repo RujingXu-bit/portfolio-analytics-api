@@ -180,3 +180,43 @@ still represented by `None`.
 
 The analytics API reports historical measurements. It does not predict prices,
 guarantee returns, or provide automatic buy or sell advice.
+
+## Deterministic risk summary
+
+`POST /portfolios/{id}/insights` first computes the same owned portfolio
+analytics and then applies versioned `risk-rules-v1` rules. The classification
+and factors have no LLM, network, database-clock, or random dependency beyond
+those already needed to obtain the analytics input. Factors always appear in
+this order: annualized volatility, maximum drawdown, Sharpe ratio, and latest
+single-security concentration.
+
+The adverse-signal score is transparent:
+
+- volatility from 15% to below 30% adds 1; 30% or more adds 2;
+- drawdown from -10% through above -25% adds 1; -25% or worse adds 2;
+- a negative Sharpe ratio adds 1;
+- largest security weight from 25% to below 50% adds 1; 50% or more adds 2.
+
+A score below 2 is `low`, 2–3 is `moderate`, and 4 or more is `high`. Positive
+Sharpe ratios do not subtract adverse points. If volatility, drawdown, and
+Sharpe are all undefined, the result is `insufficient_data` even when a latest
+weight exists.
+
+Every result states that historical adjusted-close metrics are not forecasts,
+records the annualization and dated risk-free-rate assumption, and explains
+that latest weight concentration does not capture sectors, correlations,
+liquidity, or related issuers. Missing metrics and stale market data add
+explicit limitations. The fixed disclaimer is: “For informational purposes
+only; not investment advice.” The rules do not generate transaction
+recommendations or guaranteed-return claims.
+
+When configured, the W4.4 DeepSeek adapter receives only a serialized structure
+containing those four metrics, simple return, latest symbol weights, `as_of`,
+stale status, and the complete methodology. It does not receive users,
+credentials, portfolio names, transactions, cash balances, or raw price data.
+The model may replace the short narrative and add up to three limitations, but
+cannot alter the deterministic risk level, factors, methodology limitations, or
+fixed disclaimer. JSON output is validated for its exact schema, lengths, and
+transaction/reward-guarantee language. Any timeout, provider error, invalid
+JSON, extra field, empty output, or unsafe wording returns the deterministic
+result instead.

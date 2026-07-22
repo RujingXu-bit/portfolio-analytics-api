@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,6 +31,12 @@ class Settings(BaseSettings):
     market_data_historical_ttl_seconds: int = Field(default=86400, gt=0)
     market_data_stale_ttl_seconds: int = Field(default=604800, gt=0)
     default_base_currency: str = Field(default="USD", min_length=3, max_length=3)
+    jwt_secret_key: SecretStr | None = Field(default=None, min_length=32)
+    access_token_expire_minutes: int = Field(default=30, gt=0)
+    deepseek_api_key: SecretStr | None = None
+    deepseek_model: str = Field(default="deepseek-v4-flash", min_length=1)
+    deepseek_timeout_seconds: float = Field(default=8.0, gt=0)
+    insight_cache_ttl_seconds: int = Field(default=86400, gt=0)
 
 
 @lru_cache

@@ -13,6 +13,13 @@ class TransactionType(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class User:
+    id: UUID
+    email: str
+    password_hash: str
+
+
+@dataclass(frozen=True, slots=True)
 class PriceBar:
     symbol: str
     date: date
@@ -37,9 +44,9 @@ class Transaction:
 @dataclass(frozen=True, slots=True)
 class Portfolio:
     id: UUID
+    owner_id: UUID
     name: str
     base_currency: str = "USD"
-    owner_id: UUID | None = None
     transactions: tuple[Transaction, ...] = ()
 
 
@@ -81,6 +88,13 @@ class ReturnType(StrEnum):
     SIMPLE = "simple"
 
 
+class RiskLevel(StrEnum):
+    LOW = "low"
+    MODERATE = "moderate"
+    HIGH = "high"
+    INSUFFICIENT_DATA = "insufficient_data"
+
+
 @dataclass(frozen=True, slots=True)
 class AnalyticsMethodology:
     annual_risk_free_rate: Decimal
@@ -114,3 +128,49 @@ class PortfolioAnalytics:
     asset_weights: tuple[AssetWeight, ...]
     methodology: AnalyticsMethodology
     stale: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class PortfolioInsight:
+    as_of: date
+    risk_level: RiskLevel
+    summary: str
+    key_factors: tuple[str, ...]
+    limitations: tuple[str, ...]
+    disclaimer: str
+    generator: str
+    model_name: str | None
+    prompt_version: str
+    stale: bool
+
+
+@dataclass(frozen=True, slots=True)
+class InsightInput:
+    as_of: date
+    simple_return: float | None
+    annualized_volatility: float | None
+    max_drawdown: float | None
+    sharpe_ratio: float | None
+    asset_weights: tuple[AssetWeight, ...]
+    methodology: AnalyticsMethodology
+    stale: bool
+
+
+@dataclass(frozen=True, slots=True)
+class GeneratedInsight:
+    summary: str
+    additional_limitations: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisSnapshot:
+    id: UUID
+    portfolio_id: UUID
+    as_of: date
+    metrics: dict[str, object]
+    methodology: dict[str, object]
+    summary: str
+    generator: str
+    model_name: str | None
+    prompt_version: str
+    generated_at: datetime

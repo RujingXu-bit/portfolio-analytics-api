@@ -17,8 +17,8 @@
 
 ### 当前状态
 
-- 项目阶段：Week 4 准备开始，W3.1–W3.5 已完成。
-- 当前优先任务：`W4.1`。
+- 项目阶段：Week 4 已完成，W4.1–W4.4 已通过验收。
+- 当前优先任务：`W5.1`。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
 
@@ -357,7 +357,7 @@ MarketDataProvider ---- Redis Cache
 
 ### Week 4：认证、权限与AI摘要（20–25小时）
 
-#### [ ] W4.1 实现认证（6–8h）
+#### [x] W4.1 实现认证（6–8h）
 
 依赖：W2.2。
 
@@ -372,7 +372,7 @@ MarketDataProvider ---- Redis Cache
 - 不存储或记录明文密码和完整token。
 - 注册、成功登录、错误密码和过期token均有测试。
 
-#### [ ] W4.2 实现资源所有权（4–5h）
+#### [x] W4.2 实现资源所有权（4–5h）
 
 依赖：W4.1、W2.4。
 
@@ -386,7 +386,7 @@ MarketDataProvider ---- Redis Cache
 - 用户A不能读取或修改用户B的任何投资组合资源。
 - 所有权测试覆盖直接ID猜测场景。
 
-#### [ ] W4.3 实现确定性风险摘要（3–4h）
+#### [x] W4.3 实现确定性风险摘要（3–4h）
 
 依赖：W1.3、W2.4、W3.5。
 
@@ -400,7 +400,7 @@ MarketDataProvider ---- Redis Cache
 - 无任何 LLM 或网络服务时仍能生成稳定摘要。
 - 摘要不包含明确买卖建议。
 
-#### [ ] W4.4 接入一个LLM Provider（6–8h）
+#### [x] W4.4 接入一个LLM Provider（6–8h）
 
 依赖：W4.3。
 
@@ -565,6 +565,57 @@ GET  /health
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] W4.4 完成单一 DeepSeek LLM Provider：应用层新增 `InsightGenerator`
+  协议，Provider 只接收后端已计算的结构化指标、资产权重、`as_of`、stale
+  状态和 methodology；响应使用严格 JSON schema 校验，风险等级、风险因素、
+  核心限制和非投资建议声明继续由 `risk-rules-v1` 决定，LLM 不参与金融计算。
+- DeepSeek 调用使用明确超时且不在 SDK 内重试；限额、超时、HTTP、解析或内容
+  安全校验失败均回退确定性摘要，不影响 analytics。成功响应按完整输入、Provider、
+  模型与提示词版本缓存；每次实际 insight 结果持久化 AnalysisSnapshot，记录模型、
+  提示词版本、生成时间及无秘密的结构化输入摘要。未配置 `DEEPSEEK_API_KEY` 时
+  应用保持纯确定性运行，不把可选外部凭据变成核心可用性依赖。
+- 验证：38 项聚焦 insight/缓存/DeepSeek mock/API 离线测试通过；`make test-all`
+  的 146 项单元与 PostgreSQL/Redis 集成测试全部通过，综合 branch coverage 为
+  93%，覆盖 LLM 超时回退、缓存、跨用户 insight 隔离和 AnalysisSnapshot
+  持久化；`make check`、`uv lock --check` 与 `git diff --check` 通过。真实
+  DeepSeek contract 测试保持显式 opt-in，并使用本地忽略的 `.env` 凭据完成
+  1 项真实请求验证；密钥未进入 Git 跟踪范围。下一步：执行 `W5.1`。
+
+- [x] W4.3 完成确定性风险摘要：新增纯领域 `risk-rules-v1`，按固定顺序
+  解释年化波动率、最大回撤、历史 Sharpe Ratio 和最新单一证券集中度，并用
+  公开阈值输出 low、moderate、high 或 insufficient_data。缺失统计、历史
+  adjusted-close/年化/无风险利率假设、集中度能力边界和 stale 数据均进入明确
+  limitations；风险等级不依赖 LLM、网络、随机数或系统当前时间。
+- 新增受认证和所有权保护的 `POST /portfolios/{id}/insights`，固定返回信息用途/
+  非投资建议声明，不生成买入、卖出或保证收益措辞。验证：27 项聚焦规则与 API
+  离线测试通过；`make check` 通过 Ruff、format、mypy（57 个源文件）及 123 项
+  离线单元测试，综合 branch coverage 为 88%；`uv lock --check` 与
+  `git diff --check` 通过。下一步：执行 `W4.4 接入一个LLM Provider`。
+
+- [x] W4.2 完成资源所有权：所有现有 `/portfolios` 路径统一要求 Bearer
+  token；创建 portfolio 时绑定当前用户，应用服务在 portfolio 查询、交易写入
+  与列表、analytics 数据加载前均校验 `owner_id`。不存在与属于其他用户的
+  portfolio 统一返回 `portfolio_not_found` 404，避免直接 ID 猜测泄漏资源存在性。
+- 新增 Alembic revision 将 `portfolios.owner_id` 设为非空；若历史库仍有无主
+  portfolio，迁移保留数据并明确失败，不删除记录或伪造归属。验证：29 项聚焦
+  ownership/交易/内存测试通过；`make check` 通过 Ruff、format、mypy（55 个
+  源文件）及 118 项离线单元测试，综合 branch coverage 为 88%；完整
+  PostgreSQL/Redis 集成测试的 11 项唯一路径均通过，其中跨用户读取/修改直接
+  ID、空库 migration 和无主数据迁移拒绝均已覆盖；`uv lock --check` 与
+  `git diff --check` 通过。下一步：执行 `W4.3 实现确定性风险摘要`。
+
+- [x] W4.1 完成用户认证：新增小写规范化邮箱注册与唯一性处理，密码通过
+  Argon2 在线程池中哈希/校验且只持久化哈希；`POST /auth/register` 与
+  `POST /auth/login` 返回统一 schema。JWT access token 使用固定 HS256
+  算法，强制校验 subject、签发/过期时间、issuer、audience 和 token 类型；
+  签名密钥只从环境读取，错误凭据、未知用户、畸形或过期 token 使用同一
+  401 认证错误，未引入 V1 外的 refresh token 或撤销机制。
+- 验证：`make check` 通过 Ruff、format、mypy（55 个源文件）及 116 项离线
+  单元测试，综合 branch coverage 为 88%；注册、成功登录、错误密码/未知邮箱、
+  重复邮箱与过期 token 聚焦测试 6 项通过；PostgreSQL 用户持久化/唯一性与
+  空库 migration 聚焦集成测试 2 项通过；`uv lock --check` 和
+  `git diff --check` 通过。下一步：执行 `W4.2 实现资源所有权`。
 
 - [x] W3.5 完成无前视偏差的多资产组合估值：按 UTC 交易发生时间重放
   账本，以现金加各标的最新已知 adjusted close 市值构造每日组合价值；

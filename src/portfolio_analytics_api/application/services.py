@@ -1,39 +1,114 @@
 import asyncio
+import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from uuid import UUID, uuid4
 
 from portfolio_analytics_api.application.errors import (
+    EmailAlreadyRegisteredError,
+    InvalidAccessTokenError,
+    InvalidCredentialsError,
     PortfolioAnalyticsUnavailableError,
     PortfolioNotFoundError,
     TransactionIdempotencyConflictError,
 )
 from portfolio_analytics_api.application.ports import (
+    AccessTokenService,
+    InsightGenerator,
     MarketDataProvider,
+    PasswordHasher,
     UnitOfWorkFactory,
 )
 from portfolio_analytics_api.domain import (
+    AnalysisSnapshot,
     AnalyticsMethodology,
+    InsightInput,
     InvalidPortfolioValuationError,
     InvalidTransactionError,
     Portfolio,
     PortfolioAnalytics,
+    PortfolioInsight,
     Transaction,
     TransactionType,
+    User,
     build_portfolio_valuation,
     calculate_annualized_volatility,
     calculate_compounded_return,
     calculate_max_drawdown_from_returns,
     calculate_sharpe_ratio,
     derive_positions,
+    generate_deterministic_insight,
     required_price_symbols,
+    validate_generated_insight,
     validate_transaction,
 )
 
 _QUANTITY_QUANTUM = Decimal("0.000000000001")
 _MONEY_QUANTUM = Decimal("0.00000001")
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class AccessToken:
+    value: str
+    expires_in_seconds: int
+
+
+class AuthenticationService:
+    def __init__(
+        self,
+        unit_of_work_factory: UnitOfWorkFactory,
+        password_hasher: PasswordHasher,
+        access_token_service: AccessTokenService,
+        id_factory: Callable[[], UUID] = uuid4,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._password_hasher = password_hasher
+        self._access_token_service = access_token_service
+        self._id_factory = id_factory
+
+    async def register(self, email: str, password: str) -> User:
+        normalized_email = email.strip().lower()
+        async with self._unit_of_work_factory() as unit_of_work:
+            if await unit_of_work.users.get_by_email(normalized_email) is not None:
+                raise EmailAlreadyRegisteredError(normalized_email)
+            password_hash = await asyncio.to_thread(
+                self._password_hasher.hash, password
+            )
+            user = User(
+                id=self._id_factory(),
+                email=normalized_email,
+                password_hash=password_hash,
+            )
+            await unit_of_work.users.add(user)
+            await unit_of_work.commit()
+            return user
+
+    async def login(self, email: str, password: str) -> AccessToken:
+        normalized_email = email.strip().lower()
+        async with self._unit_of_work_factory() as unit_of_work:
+            user = await unit_of_work.users.get_by_email(normalized_email)
+        if user is None:
+            raise InvalidCredentialsError()
+        password_matches = await asyncio.to_thread(
+            self._password_hasher.verify, password, user.password_hash
+        )
+        if not password_matches:
+            raise InvalidCredentialsError()
+        return AccessToken(
+            value=self._access_token_service.issue(user.id),
+            expires_in_seconds=self._access_token_service.expires_in_seconds,
+        )
+
+    async def authenticate(self, token: str) -> User:
+        user_id = self._access_token_service.verify(token)
+        async with self._unit_of_work_factory() as unit_of_work:
+            user = await unit_of_work.users.get(user_id)
+        if user is None:
+            raise InvalidAccessTokenError()
+        return user
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,11 +140,13 @@ class PortfolioService:
 
     async def create(
         self,
+        owner_id: UUID,
         name: str,
         base_currency: str,
     ) -> Portfolio:
         portfolio = Portfolio(
             id=self._id_factory(),
+            owner_id=owner_id,
             name=name,
             base_currency=base_currency.strip().upper(),
         )
@@ -78,10 +155,10 @@ class PortfolioService:
             await unit_of_work.commit()
         return portfolio
 
-    async def get(self, portfolio_id: UUID) -> Portfolio:
+    async def get(self, owner_id: UUID, portfolio_id: UUID) -> Portfolio:
         async with self._unit_of_work_factory() as unit_of_work:
             portfolio = await unit_of_work.portfolios.get(portfolio_id)
-            if portfolio is None:
+            if portfolio is None or portfolio.owner_id != owner_id:
                 raise PortfolioNotFoundError(portfolio_id)
             return portfolio
 
@@ -99,21 +176,22 @@ class PortfolioAnalyticsService:
 
     async def analyze(
         self,
+        owner_id: UUID,
         portfolio_id: UUID,
         start_date: date,
         end_date: date,
     ) -> PortfolioAnalytics:
-        if start_date > end_date:
-            raise PortfolioAnalyticsUnavailableError(
-                "start_date must not be after end_date"
-            )
-
         async with self._unit_of_work_factory() as unit_of_work:
             portfolio = await unit_of_work.portfolios.get(portfolio_id)
-            if portfolio is None:
+            if portfolio is None or portfolio.owner_id != owner_id:
                 raise PortfolioNotFoundError(portfolio_id)
             transactions = await unit_of_work.transactions.list_for_portfolio(
                 portfolio_id
+            )
+
+        if start_date > end_date:
+            raise PortfolioAnalyticsUnavailableError(
+                "start_date must not be after end_date"
             )
 
         try:
@@ -170,6 +248,121 @@ class PortfolioAnalyticsService:
         )
 
 
+class PortfolioInsightService:
+    def __init__(
+        self,
+        analytics_service: PortfolioAnalyticsService,
+        unit_of_work_factory: UnitOfWorkFactory,
+        insight_generator: InsightGenerator | None = None,
+        id_factory: Callable[[], UUID] = uuid4,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._analytics_service = analytics_service
+        self._unit_of_work_factory = unit_of_work_factory
+        self._insight_generator = insight_generator
+        self._id_factory = id_factory
+        self._clock = clock
+
+    async def generate(
+        self,
+        owner_id: UUID,
+        portfolio_id: UUID,
+        start_date: date,
+        end_date: date,
+    ) -> PortfolioInsight:
+        analytics = await self._analytics_service.analyze(
+            owner_id=owner_id,
+            portfolio_id=portfolio_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        insight_input = _build_insight_input(analytics)
+        insight = generate_deterministic_insight(analytics)
+        if self._insight_generator is not None:
+            try:
+                generated = await self._insight_generator.generate(insight_input)
+                validate_generated_insight(generated)
+            except Exception as error:
+                logger.warning(
+                    "optional insight generator failed; using deterministic rules",
+                    extra={"error_type": type(error).__name__},
+                )
+            else:
+                insight = replace(
+                    insight,
+                    summary=generated.summary,
+                    limitations=tuple(
+                        dict.fromkeys(
+                            (*insight.limitations, *generated.additional_limitations)
+                        )
+                    ),
+                    generator=self._insight_generator.generator_name,
+                    model_name=self._insight_generator.model_name,
+                    prompt_version=self._insight_generator.prompt_version,
+                )
+
+        snapshot = AnalysisSnapshot(
+            id=self._id_factory(),
+            portfolio_id=portfolio_id,
+            as_of=insight.as_of,
+            metrics=_snapshot_metrics(insight_input),
+            methodology=_snapshot_methodology(insight_input.methodology),
+            summary=insight.summary,
+            generator=insight.generator,
+            model_name=insight.model_name,
+            prompt_version=insight.prompt_version,
+            generated_at=self._clock(),
+        )
+        async with self._unit_of_work_factory() as unit_of_work:
+            await unit_of_work.analysis_snapshots.add(snapshot)
+            await unit_of_work.commit()
+        return insight
+
+
+def _build_insight_input(analytics: PortfolioAnalytics) -> InsightInput:
+    return InsightInput(
+        as_of=analytics.as_of,
+        simple_return=analytics.simple_return,
+        annualized_volatility=analytics.annualized_volatility,
+        max_drawdown=analytics.max_drawdown,
+        sharpe_ratio=analytics.sharpe_ratio,
+        asset_weights=analytics.asset_weights,
+        methodology=analytics.methodology,
+        stale=analytics.stale,
+    )
+
+
+def _snapshot_metrics(insight_input: InsightInput) -> dict[str, object]:
+    return {
+        "as_of": insight_input.as_of.isoformat(),
+        "simple_return": insight_input.simple_return,
+        "annualized_volatility": insight_input.annualized_volatility,
+        "max_drawdown": insight_input.max_drawdown,
+        "sharpe_ratio": insight_input.sharpe_ratio,
+        "asset_weights": [
+            {"symbol": weight.symbol, "weight": str(weight.weight)}
+            for weight in insight_input.asset_weights
+        ],
+        "stale": insight_input.stale,
+    }
+
+
+def _snapshot_methodology(methodology: AnalyticsMethodology) -> dict[str, object]:
+    return {
+        "annual_risk_free_rate": str(methodology.annual_risk_free_rate),
+        "risk_free_rate_as_of": methodology.risk_free_rate_as_of.isoformat(),
+        "risk_free_rate_assumption": methodology.risk_free_rate_assumption,
+        "price_basis": methodology.price_basis.value,
+        "return_type": methodology.return_type.value,
+        "annualization_periods": methodology.annualization_periods,
+        "valuation_method": methodology.valuation_method,
+        "cash_flow_policy": methodology.cash_flow_policy,
+        "fee_policy": methodology.fee_policy,
+        "date_alignment_policy": methodology.date_alignment_policy,
+        "transaction_date_timezone": methodology.transaction_date_timezone,
+    }
+
+
 class TransactionService:
     def __init__(
         self,
@@ -183,21 +376,22 @@ class TransactionService:
 
     async def create(
         self,
+        owner_id: UUID,
         portfolio_id: UUID,
         new_transaction: NewTransaction,
     ) -> TransactionCreation:
-        transaction = _build_transaction(
-            portfolio_id=portfolio_id,
-            new_transaction=new_transaction,
-            transaction_id=self._id_factory(),
-            created_at=self._clock(),
-        )
-        validate_transaction(transaction)
-
         async with self._unit_of_work_factory() as unit_of_work:
             portfolio = await unit_of_work.portfolios.get_for_update(portfolio_id)
-            if portfolio is None:
+            if portfolio is None or portfolio.owner_id != owner_id:
                 raise PortfolioNotFoundError(portfolio_id)
+
+            transaction = _build_transaction(
+                portfolio_id=portfolio_id,
+                new_transaction=new_transaction,
+                transaction_id=self._id_factory(),
+                created_at=self._clock(),
+            )
+            validate_transaction(transaction)
 
             existing = await unit_of_work.transactions.get_by_external_id(
                 portfolio_id, transaction.external_id
@@ -215,10 +409,10 @@ class TransactionService:
             await unit_of_work.commit()
             return TransactionCreation(transaction=transaction, created=True)
 
-    async def list(self, portfolio_id: UUID) -> tuple[Transaction, ...]:
+    async def list(self, owner_id: UUID, portfolio_id: UUID) -> tuple[Transaction, ...]:
         async with self._unit_of_work_factory() as unit_of_work:
             portfolio = await unit_of_work.portfolios.get(portfolio_id)
-            if portfolio is None:
+            if portfolio is None or portfolio.owner_id != owner_id:
                 raise PortfolioNotFoundError(portfolio_id)
             return await unit_of_work.transactions.list_for_portfolio(portfolio_id)
 

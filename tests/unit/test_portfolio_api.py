@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import fields
 from datetime import date
 from decimal import Decimal
 from math import sqrt
@@ -10,6 +11,7 @@ import pytest
 
 from portfolio_analytics_api.api import create_app
 from portfolio_analytics_api.application import (
+    InsightGenerator,
     MarketDataInvalidResponseError,
     MarketDataProvider,
     MarketDataRateLimitError,
@@ -18,11 +20,18 @@ from portfolio_analytics_api.application import (
     MarketDataUnavailableError,
     UnitOfWork,
 )
-from portfolio_analytics_api.domain import AnalyticsMethodology, PriceBar
+from portfolio_analytics_api.domain import (
+    AnalyticsMethodology,
+    GeneratedInsight,
+    PriceBar,
+)
 from portfolio_analytics_api.infrastructure import (
+    Argon2PasswordHasher,
+    FakeInsightGenerator,
     FakeMarketDataProvider,
     InMemoryStore,
     InMemoryUnitOfWork,
+    JwtAccessTokenService,
 )
 
 
@@ -30,11 +39,13 @@ from portfolio_analytics_api.infrastructure import (
 async def api_client(
     price_bars_by_symbol: dict[str, tuple[PriceBar, ...]],
     market_data_provider: MarketDataProvider | None = None,
+    insight_generator: InsightGenerator | None = None,
+    store: InMemoryStore | None = None,
 ) -> AsyncIterator[httpx.AsyncClient]:
-    store = InMemoryStore()
+    actual_store = store or InMemoryStore()
 
     def unit_of_work_factory() -> UnitOfWork:
-        return InMemoryUnitOfWork(store)
+        return InMemoryUnitOfWork(actual_store)
 
     app = create_app(
         unit_of_work_factory=unit_of_work_factory,
@@ -48,12 +59,35 @@ async def api_client(
             risk_free_rate_as_of=date(2026, 1, 1),
             risk_free_rate_assumption="Fixed offline test rate.",
         ),
+        password_hasher=Argon2PasswordHasher(),
+        access_token_service=JwtAccessTokenService(
+            secret_key="unit-test-secret-key-with-32-characters",
+            expire_minutes=30,
+        ),
+        insight_generator=insight_generator,
     )
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
         base_url="http://test",
     ) as client:
+        registration = await client.post(
+            "/auth/register",
+            json={
+                "email": "owner@example.com",
+                "password": "portfolio owner password",
+            },
+        )
+        assert registration.status_code == 201
+        login = await client.post(
+            "/auth/login",
+            json={
+                "email": "owner@example.com",
+                "password": "portfolio owner password",
+            },
+        )
+        assert login.status_code == 200
+        client.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
         yield client
 
 
@@ -273,6 +307,68 @@ async def test_missing_portfolio_has_stable_not_found_errors() -> None:
 
 
 @pytest.mark.anyio
+async def test_portfolio_routes_require_bearer_authentication() -> None:
+    async with api_client({}) as client:
+        del client.headers["Authorization"]
+        response = await client.post("/portfolios", json={"name": "Private"})
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+    assert response.json()["error"]["code"] == "authentication_failed"
+
+
+@pytest.mark.anyio
+async def test_direct_id_guess_cannot_access_another_users_resources() -> None:
+    async with api_client({}) as client:
+        portfolio_id = await create_portfolio(client)
+        second_registration = await client.post(
+            "/auth/register",
+            json={
+                "email": "other@example.com",
+                "password": "another owner password",
+            },
+        )
+        assert second_registration.status_code == 201
+        second_login = await client.post(
+            "/auth/login",
+            json={
+                "email": "other@example.com",
+                "password": "another owner password",
+            },
+        )
+        other_headers = {
+            "Authorization": f"Bearer {second_login.json()['access_token']}"
+        }
+        responses = (
+            await client.get(f"/portfolios/{portfolio_id}", headers=other_headers),
+            await client.get(
+                f"/portfolios/{portfolio_id}/transactions", headers=other_headers
+            ),
+            await client.post(
+                f"/portfolios/{portfolio_id}/transactions",
+                json=buy_transaction(),
+                headers=other_headers,
+            ),
+            await client.get(
+                f"/portfolios/{portfolio_id}/analytics",
+                params={"start_date": "2026-01-01", "end_date": "2026-01-31"},
+                headers=other_headers,
+            ),
+            await client.post(
+                f"/portfolios/{portfolio_id}/insights",
+                params={"start_date": "2026-01-01", "end_date": "2026-01-31"},
+                headers=other_headers,
+            ),
+        )
+
+    assert all(response.status_code == 404 for response in responses)
+    assert all(
+        response.json()["error"]["code"] == "portfolio_not_found"
+        for response in responses
+    )
+
+
+@pytest.mark.anyio
 async def test_multi_symbol_analytics_returns_latest_asset_weights() -> None:
     prices: dict[str, tuple[PriceBar, ...]] = {
         "DEMO": (
@@ -391,6 +487,124 @@ async def test_stale_market_data_is_explicit_in_analytics_response() -> None:
 
     assert response.status_code == 200
     assert response.json()["stale"] is True
+
+
+@pytest.mark.anyio
+async def test_rule_based_insight_is_stable_and_offline() -> None:
+    prices = (
+        PriceBar("DEMO", date(2026, 1, 2), Decimal("100")),
+        PriceBar("DEMO", date(2026, 1, 5), Decimal("110")),
+        PriceBar("DEMO", date(2026, 1, 6), Decimal("99")),
+    )
+    async with api_client({"DEMO": prices}) as client:
+        portfolio_id = await create_portfolio(client)
+        await client.post(
+            f"/portfolios/{portfolio_id}/transactions", json=buy_transaction()
+        )
+        first = await client.post(
+            f"/portfolios/{portfolio_id}/insights",
+            params={"start_date": "2026-01-02", "end_date": "2026-01-06"},
+        )
+        second = await client.post(
+            f"/portfolios/{portfolio_id}/insights",
+            params={"start_date": "2026-01-02", "end_date": "2026-01-06"},
+        )
+
+    assert first.status_code == 200
+    assert first.json() == second.json()
+    body = first.json()
+    assert body["generator"] == "deterministic_rules"
+    assert body["model_name"] is None
+    assert body["prompt_version"] == "risk-rules-v1"
+    assert body["disclaimer"] == (
+        "For informational purposes only; not investment advice."
+    )
+
+
+@pytest.mark.anyio
+async def test_fake_generator_enriches_rules_and_records_snapshot() -> None:
+    prices = (
+        PriceBar("DEMO", date(2026, 1, 2), Decimal("100")),
+        PriceBar("DEMO", date(2026, 1, 5), Decimal("110")),
+        PriceBar("DEMO", date(2026, 1, 6), Decimal("99")),
+    )
+    generated = GeneratedInsight(
+        summary=(
+            "The supplied historical metrics show material variability and "
+            "concentration."
+        ),
+        additional_limitations=("The observation window is short.",),
+    )
+    generator = FakeInsightGenerator(generated)
+    store = InMemoryStore()
+    async with api_client(
+        {"DEMO": prices}, insight_generator=generator, store=store
+    ) as client:
+        portfolio_id = await create_portfolio(client)
+        await client.post(
+            f"/portfolios/{portfolio_id}/transactions", json=buy_transaction()
+        )
+        response = await client.post(
+            f"/portfolios/{portfolio_id}/insights",
+            params={"start_date": "2026-01-02", "end_date": "2026-01-06"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["generator"] == "fake"
+    assert body["model_name"] == "fake-model"
+    assert body["prompt_version"] == "fake-prompt-v1"
+    assert body["risk_level"] == "high"
+    assert body["summary"] == generated.summary
+    assert "The observation window is short." in body["limitations"]
+    assert len(generator.inputs) == 1
+    assert {field.name for field in fields(generator.inputs[0])} == {
+        "as_of",
+        "simple_return",
+        "annualized_volatility",
+        "max_drawdown",
+        "sharpe_ratio",
+        "asset_weights",
+        "methodology",
+        "stale",
+    }
+    snapshot = store.analysis_snapshots[0]
+    assert snapshot.generator == "fake"
+    assert snapshot.model_name == "fake-model"
+    assert snapshot.prompt_version == "fake-prompt-v1"
+    assert snapshot.metrics["as_of"] == "2026-01-06"
+    assert snapshot.methodology["price_basis"] == "adjusted_close"
+
+
+@pytest.mark.anyio
+async def test_generator_failure_returns_rules_and_keeps_analytics_available() -> None:
+    prices = (
+        PriceBar("DEMO", date(2026, 1, 2), Decimal("100")),
+        PriceBar("DEMO", date(2026, 1, 5), Decimal("110")),
+        PriceBar("DEMO", date(2026, 1, 6), Decimal("99")),
+    )
+    generator = FakeInsightGenerator(TimeoutError("simulated timeout"))
+    store = InMemoryStore()
+    async with api_client(
+        {"DEMO": prices}, insight_generator=generator, store=store
+    ) as client:
+        portfolio_id = await create_portfolio(client)
+        await client.post(
+            f"/portfolios/{portfolio_id}/transactions", json=buy_transaction()
+        )
+        insight = await client.post(
+            f"/portfolios/{portfolio_id}/insights",
+            params={"start_date": "2026-01-02", "end_date": "2026-01-06"},
+        )
+        analytics = await client.get(
+            f"/portfolios/{portfolio_id}/analytics",
+            params={"start_date": "2026-01-02", "end_date": "2026-01-06"},
+        )
+
+    assert insight.status_code == analytics.status_code == 200
+    assert insight.json()["generator"] == "deterministic_rules"
+    assert insight.json()["model_name"] is None
+    assert store.analysis_snapshots[0].generator == "deterministic_rules"
 
 
 @pytest.mark.anyio
