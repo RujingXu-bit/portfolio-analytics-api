@@ -17,12 +17,11 @@
 
 ### 当前状态
 
-- 项目阶段：后端 `v1.2.0` 发布准备中，公开演示、Post-V1 P2 增强及 `R2.1`
-  最终审查均已完成。
-- 当前优先任务：完成 `R2.2` 发布门禁、合并、tag 与 GitHub Release。
+- 项目阶段：后端 `v1.2.0`、公开演示、Post-V1 P2 增强及最终审查均已完成。
+- 当前优先任务：无；计划内 Post-V1 与 P2 工作均已完成并正式版本化。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
-- Post-V1 后端当前正式版：`v1.1.0`；E2.x 变更记录于 Unreleased；独立 Web
+- Post-V1 后端当前正式版：`v1.2.0`；独立 Web
   前端当前正式版：`v1.0.0`。
 
 ## 2. 产品范围
@@ -733,7 +732,7 @@ CONDITIONAL PASS 或 FAIL 结论。
 幂等边界由离线、PostgreSQL 与公网证据共同支持；全部门禁通过且不存在未解决的
 P0/P1 问题。只有最终结论为 PASS 才能勾选本任务并开始正式版本化 E2.x。
 
-#### [ ] R2.2 发布后端 v1.2.0（3–5h）
+#### [x] R2.2 发布后端 v1.2.0（3–5h）
 
 依赖：R2.1。
 
@@ -772,6 +771,25 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] R2.2 已正式发布后端 `v1.2.0`。发布起始基线为
+  `main@2f310b0a49dc010bc960fe249e35c3b94f5095ed`，且
+  `HEAD == origin/main: yes`、`Worktree clean: yes`；PR #31 squash merge 后的
+  已验证 release commit 为 `58bedea5eb582d4d4275c0778f914cb69bc9abc8`。
+  Python 包、`uv.lock`、FastAPI OpenAPI、README、简历入口与 changelog 均同步为
+  `1.2.0`，E2.1/E2.2 和长窗口 fail-closed 修复已从 Unreleased 正式发布。
+- 发布门禁：`make check` 通过 Ruff、format、严格 mypy（95 个源文件）和 223 项
+  单元测试，branch coverage 90%；`make test-all` 通过 239 项单元/集成测试，
+  branch coverage 94%；`make db-check`、`uv lock --check`、Compose 配置、
+  `git diff --check` 与 `make image-smoke` 均通过。`uv build` 生成 `1.2.0` wheel
+  与 sdist，wheel metadata 明确为 `Version: 1.2.0`；真实 yfinance、Twelve Data
+  短窗口及 5,000 点长窗口 contract 共 3 项通过。PR #31 的两个 quality jobs 和
+  release commit CI run `29951157732` 全部成功。
+- annotated `v1.2.0` tag 已推送并解引用到 release commit；非 draft、非
+  prerelease GitHub Release 已发布：
+  <https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.2.0>。
+  Release 附带已验证的 wheel 与 sdist，GitHub 分别记录 SHA-256 digest；tag、
+  Release 和构建元数据版本一致。计划内 Post-V1/P2 工作至此无剩余任务。
 
 - [x] R2.1 最终复审结论为 **PASS**。Review baseline:
   `main@2cf07bd27e928d30065ebd40aee8541d35397d26`；
