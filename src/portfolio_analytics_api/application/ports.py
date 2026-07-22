@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import date
 from types import TracebackType
 from typing import Protocol
@@ -7,13 +8,19 @@ from uuid import UUID
 from portfolio_analytics_api.domain import Portfolio, PriceBar, Transaction
 
 
+@dataclass(frozen=True, slots=True)
+class MarketDataResult:
+    price_bars: tuple[PriceBar, ...]
+    stale: bool = False
+
+
 class MarketDataProvider(Protocol):
     async def get_price_bars(
         self,
         symbol: str,
         start_date: date,
         end_date: date,
-    ) -> tuple[PriceBar, ...]: ...
+    ) -> MarketDataResult: ...
 
 
 class PortfolioRepository(Protocol):

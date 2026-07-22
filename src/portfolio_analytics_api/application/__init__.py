@@ -1,5 +1,10 @@
 from portfolio_analytics_api.application.errors import (
+    MarketDataInvalidResponseError,
     MarketDataNotFoundError,
+    MarketDataRateLimitError,
+    MarketDataRetryableError,
+    MarketDataTimeoutError,
+    MarketDataUnavailableError,
     PortfolioAlreadyExistsError,
     PortfolioAnalyticsUnavailableError,
     PortfolioNotFoundError,
@@ -7,6 +12,7 @@ from portfolio_analytics_api.application.errors import (
 )
 from portfolio_analytics_api.application.ports import (
     MarketDataProvider,
+    MarketDataResult,
     PortfolioRepository,
     TransactionRepository,
     UnitOfWork,
@@ -21,8 +27,14 @@ from portfolio_analytics_api.application.services import (
 )
 
 __all__ = [
+    "MarketDataInvalidResponseError",
     "MarketDataNotFoundError",
     "MarketDataProvider",
+    "MarketDataRateLimitError",
+    "MarketDataResult",
+    "MarketDataRetryableError",
+    "MarketDataTimeoutError",
+    "MarketDataUnavailableError",
     "NewTransaction",
     "PortfolioAlreadyExistsError",
     "PortfolioAnalyticsService",

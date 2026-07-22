@@ -136,6 +136,7 @@ class PortfolioAnalyticsResponse(BaseModel):
     max_drawdown: float | None
     sharpe_ratio: float | None
     methodology: MethodologyResponse
+    stale: bool
 
 
 class ErrorBody(BaseModel):

@@ -9,7 +9,15 @@ import httpx
 import pytest
 
 from portfolio_analytics_api.api import create_app
-from portfolio_analytics_api.application import UnitOfWork
+from portfolio_analytics_api.application import (
+    MarketDataInvalidResponseError,
+    MarketDataProvider,
+    MarketDataRateLimitError,
+    MarketDataResult,
+    MarketDataTimeoutError,
+    MarketDataUnavailableError,
+    UnitOfWork,
+)
 from portfolio_analytics_api.domain import AnalyticsMethodology, PriceBar
 from portfolio_analytics_api.infrastructure import (
     FakeMarketDataProvider,
@@ -21,6 +29,7 @@ from portfolio_analytics_api.infrastructure import (
 @asynccontextmanager
 async def api_client(
     price_bars_by_symbol: dict[str, tuple[PriceBar, ...]],
+    market_data_provider: MarketDataProvider | None = None,
 ) -> AsyncIterator[httpx.AsyncClient]:
     store = InMemoryStore()
 
@@ -29,7 +38,11 @@ async def api_client(
 
     app = create_app(
         unit_of_work_factory=unit_of_work_factory,
-        market_data_provider=FakeMarketDataProvider(price_bars_by_symbol),
+        market_data_provider=(
+            market_data_provider
+            if market_data_provider is not None
+            else FakeMarketDataProvider(price_bars_by_symbol)
+        ),
         methodology=AnalyticsMethodology(
             annual_risk_free_rate=Decimal("0"),
             risk_free_rate_as_of=date(2026, 1, 1),
@@ -114,6 +127,7 @@ async def test_persistent_api_returns_portfolio_transactions_and_metrics() -> No
     assert body["max_drawdown"] == pytest.approx(-0.1)
     assert body["sharpe_ratio"] == pytest.approx(0.0)
     assert body["methodology"]["price_basis"] == "adjusted_close"
+    assert body["stale"] is False
 
 
 @pytest.mark.anyio
@@ -320,3 +334,74 @@ async def test_invalid_price_series_has_stable_error() -> None:
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "invalid_price_series"
+
+
+class ResultMarketDataProvider:
+    def __init__(self, result: MarketDataResult | Exception) -> None:
+        self._result = result
+
+    async def get_price_bars(
+        self,
+        symbol: str,
+        start_date: date,
+        end_date: date,
+    ) -> MarketDataResult:
+        if isinstance(self._result, Exception):
+            raise self._result
+        return self._result
+
+
+@pytest.mark.anyio
+async def test_stale_market_data_is_explicit_in_analytics_response() -> None:
+    result = MarketDataResult(
+        (
+            PriceBar("DEMO", date(2026, 1, 2), Decimal("100")),
+            PriceBar("DEMO", date(2026, 1, 5), Decimal("101")),
+        ),
+        stale=True,
+    )
+    async with api_client({}, ResultMarketDataProvider(result)) as client:
+        portfolio_id = await create_portfolio(client)
+        await client.post(
+            f"/portfolios/{portfolio_id}/transactions", json=buy_transaction()
+        )
+        response = await client.get(
+            f"/portfolios/{portfolio_id}/analytics",
+            params={"start_date": "2026-01-01", "end_date": "2026-01-31"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["stale"] is True
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("error", "expected_status", "expected_code"),
+    [
+        (
+            MarketDataInvalidResponseError("bad payload"),
+            502,
+            "market_data_invalid_response",
+        ),
+        (MarketDataRateLimitError(), 503, "market_data_rate_limited"),
+        (MarketDataUnavailableError(), 503, "market_data_unavailable"),
+        (MarketDataTimeoutError(), 504, "market_data_timeout"),
+    ],
+)
+async def test_market_data_failures_have_stable_http_mapping(
+    error: Exception,
+    expected_status: int,
+    expected_code: str,
+) -> None:
+    async with api_client({}, ResultMarketDataProvider(error)) as client:
+        portfolio_id = await create_portfolio(client)
+        await client.post(
+            f"/portfolios/{portfolio_id}/transactions", json=buy_transaction()
+        )
+        response = await client.get(
+            f"/portfolios/{portfolio_id}/analytics",
+            params={"start_date": "2026-01-01", "end_date": "2026-01-31"},
+        )
+
+    assert response.status_code == expected_status
+    assert response.json()["error"]["code"] == expected_code

@@ -23,6 +23,13 @@ cannot be determined rather than silently applying the host timezone or UTC.
 Provider-specific timestamp and timezone handling belongs at this adapter
 boundary; domain analytics operate only on the normalized date.
 
+The yfinance adapter requests daily data with `auto_adjust=False` and reads the
+explicit `Adj Close` column. Its end parameter is exclusive, so the adapter adds
+one day to the API's inclusive requested end date. Rows with missing or
+non-positive adjusted close, a missing exchange timezone, or duplicate session
+dates are rejected instead of silently repaired or deduplicated. Non-trading
+days simply have no observation.
+
 Prices remain `Decimal` values in domain objects. Statistical calculations may
 explicitly convert copies of those values to floating-point numbers, but must
 not overwrite the original prices.
@@ -101,6 +108,12 @@ than two daily returns or when volatility is zero.
 The result also contains `as_of` and `AnalyticsMethodology`. An undefined
 metric is represented by `None`; return sequences used internally are empty
 when fewer than two prices are available.
+
+The result contains a top-level `stale` boolean. It is false for direct provider
+responses and unexpired cache hits. It is true only when a transient upstream
+failure exhausts its bounded retries and analytics use a validated retained
+cache copy. Invalid symbols, deterministic data errors, and corrupt cache
+payloads never produce stale results.
 
 For the current analytics API, `simple_return` is the simple return from the first
 to the last adjusted-close observation inside the inclusive requested date

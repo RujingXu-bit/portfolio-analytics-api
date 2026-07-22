@@ -125,11 +125,12 @@ class PortfolioAnalyticsService:
             )
         symbol = next(iter(symbols))
 
-        price_bars = await self._market_data_provider.get_price_bars(
+        market_data = await self._market_data_provider.get_price_bars(
             symbol=symbol,
             start_date=start_date,
             end_date=end_date,
         )
+        price_bars = market_data.price_bars
         if not price_bars:
             raise PortfolioAnalyticsUnavailableError(
                 f"no price bars fall within the requested range for {symbol}"
@@ -156,6 +157,7 @@ class PortfolioAnalyticsService:
                 self._methodology.annualization_periods,
             ),
             methodology=self._methodology,
+            stale=market_data.stale,
         )
 
 

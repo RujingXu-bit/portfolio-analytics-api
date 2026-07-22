@@ -17,8 +17,8 @@
 
 ### 当前状态
 
-- 项目阶段：Week 2 已完成，准备进入 Week 3。
-- 当前优先任务：`W3.1`。
+- 项目阶段：Week 3 进行中，W3.1–W3.4 已完成。
+- 当前优先任务：`W3.5`。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
 
@@ -249,7 +249,7 @@ MarketDataProvider ---- Redis Cache
 
 ### Week 3：市场数据、Redis与韧性（26–33小时）
 
-#### [ ] W3.1 实现第一个真实 Provider（6–8h）
+#### [x] W3.1 实现第一个真实 Provider（6–8h）
 
 依赖：W1.4。
 
@@ -266,14 +266,15 @@ MarketDataProvider ---- Redis Cache
 - Provider contract test 可手动运行。
 - 普通单元测试和 CI 不访问真实网络。
 
-#### [ ] W3.2 实现Redis缓存（5–6h）
+#### [x] W3.2 实现Redis缓存（5–6h）
 
 依赖：W2.1、W3.1。
 
 工作内容：
 
 - 设计带版本的缓存键。
-- 为报价、未闭市数据和历史数据设置不同 TTL。
+- 为可能变化的日线范围和已完成历史设置不同 TTL；独立 quote TTL 等真正
+  增加 quote 能力时再实现，不扩张当前 V1 API。
 - 记录 cache hit/miss。
 - 测试序列化、过期和缓存旁路。
 
@@ -283,7 +284,7 @@ MarketDataProvider ---- Redis Cache
 - 缓存内容可正确还原为内部类型。
 - Redis 失效时可以明确报错或安全回退，不返回损坏数据。
 
-#### [ ] W3.3 实现超时、重试与降级（5–6h）
+#### [x] W3.3 实现超时、重试与降级（5–6h）
 
 依赖：W3.1、W3.2。
 
@@ -300,7 +301,7 @@ MarketDataProvider ---- Redis Cache
 - 重试有次数上限且不存在无限等待。
 - 返回旧数据时 API 明确标记 `stale`。
 
-#### [ ] W3.4 第二Provider决策点（2–4h，可选）
+#### [x] W3.4 第二Provider决策点（2–4h，可选）
 
 依赖：W3.3。
 
@@ -544,6 +545,68 @@ GET  /health
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] W3.4 完成第二 Provider 决策：W3.1-W3.3 的真实 Provider、离线 Fake、
+  Redis 缓存、有限重试和 stale 降级均已通过验证，但必需的 W3.5 多资产
+  估值尚未开始；因此不实现 Finnhub、Twelve Data 或其他第二真实 Provider，
+  保持其 Backlog/Should 状态且不阻塞 V1。
+- 现有 `MarketDataProvider` 依赖注入边界和共享 contract test 足以支持未来
+  Provider；本任务未新增 Provider factory、配置枚举、API、凭据或依赖。
+  只有 V1 关键路径稳定且 `PROJECT_PLAN.md` 明确调整优先级后才重启该工作。
+- 验证：`make check` 通过，Ruff、format、mypy（50 个源文件）与 95 项离线
+  单元测试通过；决策与 Backlog 关键词检查及 `git diff --check` 通过。
+  下一步：执行 `W3.5 实现多资产组合估值`。
+
+- [x] W3.3 完成市场数据韧性与明确 stale 降级：Provider 协议返回包含
+  `price_bars` 与 `stale` 的内部结果，analytics API 新增顶层必填
+  `stale` 布尔值；直接 Provider 与未过期缓存返回 false，仅在可重试故障
+  耗尽且后备 payload 验证成功时返回 true。
+- yfinance 传输请求使用 10 秒 timeout，整个重试序列受 12 秒 operation
+  deadline 约束；最多 3 次尝试，退避为 0.25/0.5 秒。无效/空 symbol 与
+  畸形数据不重试，429、5xx/网络错误和 timeout 使用稳定内部错误；没有
+  可用 stale 时分别映射为 503、503 和 504，畸形供应商响应映射 502。
+- 组合顺序固定为 cache -> retry/deadline -> yfinance。缓存只捕获 retryable
+  错误读取 stale；确定性错误、损坏 stale 和 Redis 故障不会返回旧数据。
+  Fake Provider、真实 Provider、contract、API 与持久化测试均已适配新协议。
+- 验证：52 项聚焦 resilience/cache/API/provider 测试通过；`make check`
+  通过，Ruff、format、mypy（50 个源文件）和 95 项离线单元测试通过；
+  `make test-all` 共 102 项通过，综合 branch coverage 为 93%；显式真实
+  yfinance contract 1 项通过；`uv lock --check` 与 `git diff --check`
+  通过。下一步：执行 `W3.4 第二Provider决策点`。
+
+- [x] W3.2 完成 Redis 市场数据缓存：`CachedMarketDataProvider` 使用包含
+  schema version、Provider、interval、price basis、symbol 和日期范围的
+  版本化键；当前/未来 end date 使用 300 秒 TTL，已完成历史使用 86,400
+  秒 TTL，并写入保留 604,800 秒的 stale 后备副本供 W3.3 使用。
+- 缓存以 ISO date 和 Decimal 字符串序列化内部 `PriceBar`，读取时重新验证
+  查询元数据、顺序、唯一日期和价格不变量。损坏 payload 被忽略并覆盖；
+  Redis 读写失败记录 bypass 后安全调用/返回 Provider，不把缓存变成核心
+  analytics 的可用性依赖。
+- Compose 新增隔离 `redis-test`，集成测试使用唯一 namespace 并只删除自身
+  键；异步 Redis client 设置独立 1 秒连接/读取超时，并在应用 lifespan
+  关闭。当前协议没有 quote 能力，因此未扩张 V1 API，只区分可变日线与已
+  完成历史 TTL。
+- 验证：`docker compose config --quiet` 通过；8 项聚焦离线缓存测试和 1 项
+  真实 Redis 测试通过；`make test-integration` 7 项通过；`make test-all`
+  共 81 项通过，综合 branch coverage 为 93%；`make check` 通过，Ruff、
+  format、mypy（48 个源文件）和 74 项单元测试通过；`uv lock --check` 与
+  `git diff --check` 通过。下一步：执行 `W3.3 实现超时、重试与降级`。
+
+- [x] W3.1 完成首个真实市场数据适配器：应用使用
+  `YFinanceMarketDataProvider` 获取日线数据，阻塞 SDK 调用经
+  `asyncio.to_thread` 移出 event loop；显式读取 `Adj Close`，将 inclusive
+  end 转换为供应商 exclusive end，并将 exchange-local session date、symbol
+  与 Decimal 价格标准化为内部 `PriceBar`。
+- 适配器拒绝缺失交易所时区、重复日期、缺失/非有限/非正 adjusted close
+  和畸形响应；无效 symbol 与空数据使用稳定内部错误。Pandas、yfinance
+  类型和供应商响应均未进入应用或领域层。
+- 真实网络 contract test 仅由 `make test-contract` 显式启用，使用 AAPL
+  2025-01-02 至 2025-01-10 的固定历史窗口成功通过 1 项；默认 contract
+  运行确认跳过网络。`Makefile` 的重复 `test-cov` 已修正，普通测试和 CI
+  只运行离线套件。
+- 验证：`uv lock --check` 通过；`make check` 与 `make test-cov` 通过，Ruff、
+  format、mypy（45 个源文件）及 66 项离线单元测试通过，branch coverage
+  为 86%；`git diff --check` 通过。下一步：执行 `W3.2 实现Redis缓存`。
 
 - [x] W2.4 完成持久化交易垂直切片：`POST /portfolios`、`GET /portfolios/{id}`、`POST/GET /portfolios/{id}/transactions` 和 `GET /portfolios/{id}/analytics` 均通过应用服务与请求级 Unit of Work 访问 PostgreSQL；路由不包含 SQL 或金融算法。
 - Portfolio 创建与交易创建已分离，Portfolio 保存单一 base currency；交易请求验证字段组合、时区和 Decimal 精度。首次交易创建返回 201，相同幂等重试返回原记录和 200，不同 payload 返回稳定 409；超卖返回稳定 422。应用启动不执行 migration，engine 在 lifespan 关闭。

@@ -6,6 +6,7 @@ from uuid import UUID
 
 from portfolio_analytics_api.application import (
     MarketDataNotFoundError,
+    MarketDataResult,
     PortfolioAlreadyExistsError,
 )
 from portfolio_analytics_api.domain import Portfolio, PriceBar, Transaction
@@ -106,20 +107,22 @@ class FakeMarketDataProvider:
         symbol: str,
         start_date: date,
         end_date: date,
-    ) -> tuple[PriceBar, ...]:
+    ) -> MarketDataResult:
         normalized_symbol = symbol.upper()
         try:
             price_bars = self._price_bars_by_symbol[normalized_symbol]
         except KeyError as error:
             raise MarketDataNotFoundError(normalized_symbol) from error
 
-        return tuple(
-            sorted(
-                (
-                    price_bar
-                    for price_bar in price_bars
-                    if start_date <= price_bar.date <= end_date
-                ),
-                key=lambda price_bar: price_bar.date,
+        return MarketDataResult(
+            tuple(
+                sorted(
+                    (
+                        price_bar
+                        for price_bar in price_bars
+                        if start_date <= price_bar.date <= end_date
+                    ),
+                    key=lambda price_bar: price_bar.date,
+                )
             )
         )
