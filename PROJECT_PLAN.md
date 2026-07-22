@@ -520,6 +520,26 @@ MarketDataProvider ---- Redis Cache
 - 演示不依赖手工修改数据库或临时补丁。
 - 已知限制在README中明确记录。
 
+#### [x] W5.R Week 5里程碑审查（2–3h）
+
+依赖：W5.1、W5.2、W5.3、W5.4、W5.5。
+
+工作内容：
+
+- 根据本计划逐项验证 W5.1–W5.5 的验收标准与完成状态。
+- 运行 `make check` 和 `make test-cov`，记录命令、结果及失败原因。
+- 审查金融计算正确性、边界测试、领域层依赖边界和测试网络隔离。
+- 按 P0、P1、P2、P3 输出带文件和行号的问题，并给出 PASS、CONDITIONAL PASS 或 FAIL 结论。
+
+验收标准：
+
+- W5.1–W5.5 的全部验收标准均由当前仓库事实和可复现验证支持。
+- `make check` 和 `make test-cov` 均成功运行。
+- 不存在未解决的 P0 或 P1 问题，P2 和 P3 问题均已记录处置结论。
+- 最终审查结论为 PASS；CONDITIONAL PASS 或 FAIL 均不视为通过，不得勾选本任务。
+
+里程碑门禁：`W5.R` 勾选完成前，不得将 V1 候选版本认定为通过里程碑验收。完成审查但结论未通过时保持 `[ ]`，在进度日志记录阻塞项并完成整改后重新审查。
+
 ## 5. 建议API范围
 
 ```http
@@ -585,6 +605,21 @@ GET  /health
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] W5.R Week 5 里程碑审查通过。Review baseline：
+  `main@f84e1aad4becbe063591e101575b7b728b68376c`；`HEAD == origin/main: yes`；
+  `Worktree clean: yes`。逐项复核 W5.1–W5.5 后未发现 P0、P1、P2 或 P3
+  问题，结论为 PASS。
+- 验证：`make check` 与 `make test-cov` 均通过 Ruff、format、严格 mypy（80 个
+  源文件）和 158 项离线单元测试，branch coverage 为 89%；基线提交对应的
+  GitHub Actions CI run `29920997467` 成功完成锁定安装、Ruff/format、mypy、
+  离线单元测试、空库 migration/check、12 项 PostgreSQL/Redis 集成测试及非
+  root 运行镜像冒烟。金融计算由可人工复核 fixture 覆盖空数据、单点、零波动、
+  持续下跌、缺失日期、重复日期、多资产、现金流、费用和无前视估值；领域层未
+  导入 FastAPI、SQLAlchemy、Pandas、基础设施或具体 Provider。普通测试使用
+  Fake/Mock/ASGI transport，真实 yfinance 与 DeepSeek 调用仅在显式 contract
+  开关下运行。`v1.0.0-rc.1` annotated tag、`uv lock --check` 与
+  `git diff --check` 均核验通过。
 
 - [x] W5.5 完成 `v1.0.0-rc.1` 候选版本与演示准备：项目包版本更新为
   `1.0.0rc1` 并同步 `uv.lock`，新增候选 changelog、API 驱动演示命令、三分钟
