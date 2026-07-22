@@ -135,7 +135,9 @@ and must not be presented as capacity planning.
 
 ### What would you build next?
 
-Choose from evidence: deploy and accept the independent frontend, add a live
-dated risk-free-rate source, token revocation, CSV import, or a second provider
-if availability requirements justify it. Do not add prediction, automatic
-trading, or distributed infrastructure merely for architecture theater.
+The independent frontend and public deployment are accepted. The next
+evidence-led enhancements are a second market-data provider for availability
+and a preview-first CSV import with stable idempotency keys. A live dated
+risk-free-rate source and token revocation remain reasonable later additions.
+Do not add prediction, automatic trading, or distributed infrastructure merely
+for architecture theater.

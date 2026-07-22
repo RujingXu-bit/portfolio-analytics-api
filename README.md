@@ -1,5 +1,29 @@
 # AI-Powered Portfolio Analytics API
 
+[![CI](https://github.com/RujingXu-bit/portfolio-analytics-api/actions/workflows/ci.yml/badge.svg)](https://github.com/RujingXu-bit/portfolio-analytics-api/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/RujingXu-bit/portfolio-analytics-api)](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.1.0)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Vercel-000000?logo=vercel)](https://portfolio-analytics-web-hazel.vercel.app)
+[![Frontend](https://img.shields.io/badge/Frontend-Next.js-111827?logo=nextdotjs)](https://github.com/RujingXu-bit/portfolio-analytics-web)
+
+[Live Demo](https://portfolio-analytics-web-hazel.vercel.app) ·
+[Offline Fixture](https://portfolio-analytics-web-hazel.vercel.app/demo) ·
+[Three-Minute Video](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4) ·
+[Video Script](docs/demo-video-script.md) ·
+[English Captions](docs/demo-video-captions.srt) ·
+[Verification](docs/demo-video-verification.md) ·
+[Backend Release](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.1.0) ·
+[Frontend Repository](https://github.com/RujingXu-bit/portfolio-analytics-web) ·
+[Interview Guide](docs/interview-guide.md) ·
+[Resume Entry](docs/resume-project-entry.md)
+
+![Portfolio Analytics dashboard showing four historical metrics and asset allocation](docs/assets/dashboard-demo.png)
+
+The 1080p [three-minute narrated walkthrough](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4)
+covers the public full-stack workflow, financial methodology, deterministic AI
+fallback, security boundary, and CI evidence. Its Provider-backed frames are
+dated and labelled as pre-recorded; the outage fallback is explicitly marked as
+a deterministic offline fixture.
+
 A FastAPI modular monolith for recording portfolios and transactions, valuing
 multi-asset holdings, and returning deterministic, explainable historical risk
 analytics. PostgreSQL stores the owned transaction ledger, Redis caches market
@@ -12,7 +36,8 @@ never calculates or overrides financial metrics or the deterministic risk
 classification. Unit tests and normal CI are fully offline.
 
 Current release: `1.1.0` / Git tag `v1.1.0`. See the
-[release changelog](CHANGELOG.md), [three-minute demo](docs/demo.md), and
+[release changelog](CHANGELOG.md), [API-only demo](docs/demo.md),
+[video script](docs/demo-video-script.md), and
 [interview guide](docs/interview-guide.md). The public-demo deployment runbook
 is in [deployment](docs/deployment.md). This is a portfolio project, not a
 production-capacity claim or investment-advice service.

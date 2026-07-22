@@ -1,4 +1,10 @@
-# Three-Minute V1 Release Demo
+# API-Only CLI Demo
+
+For the final full-stack three-minute video, use
+[`demo-video-script.md`](demo-video-script.md), its matching
+[`SRT captions`](demo-video-captions.srt), and the
+[published 1080p video](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4).
+This page remains the terminal-first backend demonstration and recovery guide.
 
 This demo uses only public HTTP endpoints. It creates its own uniquely named
 user, portfolio, deposit, and BUY; proves transaction idempotency; calculates

@@ -10,3 +10,4 @@ htmlcov/
 .env
 .DS_Store
 .artifacts/
+docs/assets/portfolio-analytics-demo.mp4
