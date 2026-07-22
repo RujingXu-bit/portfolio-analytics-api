@@ -66,7 +66,7 @@ def create_app(
             await shutdown_callback()
 
     policies = rate_limit_policies or RateLimitPolicies()
-    app = FastAPI(title="Portfolio Analytics API", version="1.2.0", lifespan=lifespan)
+    app = FastAPI(title="Ledger Lens API", version="1.2.0", lifespan=lifespan)
     app.add_middleware(RequestObservabilityMiddleware)
     authentication_service = AuthenticationService(
         unit_of_work_factory=unit_of_work_factory,

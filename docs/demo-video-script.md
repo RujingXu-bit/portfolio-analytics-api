@@ -1,4 +1,4 @@
-# Portfolio Analytics — Three-Minute Demo Script
+# Ledger Lens — Three-Minute Demo Script
 
 目标成片：1080p、16:9、2:50–3:05。英文口播与屏幕字幕逐句一致；中文仅用于
 导演说明和操作提示。所有画面只使用合成演示数据。Provider-backed 片段为录制时
@@ -18,7 +18,7 @@
 
 镜头：Landing 首屏；光标依次停留在 “Explore the offline demo” 和产品边界文案。
 
-> Portfolio Analytics turns an auditable transaction ledger into explainable historical risk metrics. It is a public engineering demo, not a trading terminal: it does not predict prices, automate trades, or provide investment advice. The offline demo stays available when providers fail.
+> Ledger Lens turns an auditable transaction ledger into explainable historical risk metrics. It is a public engineering demo, not a trading terminal: it does not predict prices, automate trades, or provide investment advice. The offline demo stays available when providers fail.
 
 ### 0:20–0:45 — 架构
 

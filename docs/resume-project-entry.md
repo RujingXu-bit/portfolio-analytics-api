@@ -6,7 +6,7 @@ source, and release described in the repository.
 
 ## Compact version
 
-**Portfolio Analytics — Full-Stack Fintech Engineering Project**  
+**Ledger Lens — Full-Stack Fintech Engineering Project**
 [Live Demo](https://portfolio-analytics-web-hazel.vercel.app) ·
 [Backend](https://github.com/RujingXu-bit/portfolio-analytics-api) ·
 [Frontend](https://github.com/RujingXu-bit/portfolio-analytics-web) ·

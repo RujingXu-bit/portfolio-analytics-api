@@ -1,4 +1,4 @@
-# AI-Powered Portfolio Analytics API：项目总计划
+# Ledger Lens：项目总计划
 
 > 本文件是项目范围、任务依赖、优先级和进度的唯一权威来源。执行任何 Task 前先阅读根目录 `AGENTS.md`。只有达到任务验收标准后才能勾选完成。
 
@@ -17,9 +17,9 @@
 
 ### 当前状态
 
-- 项目阶段：后端 `v1.2.0`、公开演示、Post-V1 P2 后端增强及可选前端 CSV
-  导入体验均已完成。
-- 当前优先任务：无；计划内任务均已完成并通过本地、CI 与公网验收。
+- 项目阶段：后端 `v1.2.0`、公开演示、Post-V1 P2 增强及前端 CSV 导入均已
+  完成；正在统一作品品牌为 `Ledger Lens`。
+- 当前优先任务：`F2.2 Ledger Lens 品牌统一`。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
 - Post-V1 后端当前正式版：`v1.2.0`；独立 Web
@@ -766,6 +766,21 @@ commit 后刷新 ledger。前端只做 1,000,000 bytes/CSV 类型的快速校验
 覆盖文件校验、状态和错误映射，Playwright 覆盖导入闭环及 375/768/1440px 关键布局；
 `pnpm check`、production build、前端 CI 与公开 Vercel 验收通过，README/OpenAPI
 类型漂移检查同步更新。
+
+#### [ ] F2.2 Ledger Lens 品牌统一（3–5h）
+
+依赖：F2.1。
+
+工作内容：将前后端所有面向用户、面试官和搜索引擎的产品名称统一为
+`Ledger Lens`，包括前端 Brand/SEO、Landing、Open Graph 图、Dashboard 截图、
+README、OpenAPI 展示标题、演示/字幕/面试/简历文档和计划标题。代码类型、API
+schema、Python/Node 包名、仓库 slug、URL、环境变量、数据库对象与部署资源名保持
+不变，避免品牌更新破坏兼容性。
+
+验收标准：文本与图片资产不再展示旧产品名；
+`PortfolioAnalytics` 等领域/API 技术标识保持不变；OpenAPI snapshot 与前端生成
+类型同步；前后端质量门禁、production build、Playwright、GitHub CI、Vercel 部署
+和公开首页 metadata/品牌展示通过。
 
 ### Post-V1 范围边界
 

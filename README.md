@@ -1,4 +1,4 @@
-# AI-Powered Portfolio Analytics API
+# Ledger Lens API
 
 [![CI](https://github.com/RujingXu-bit/portfolio-analytics-api/actions/workflows/ci.yml/badge.svg)](https://github.com/RujingXu-bit/portfolio-analytics-api/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/RujingXu-bit/portfolio-analytics-api)](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.2.0)
@@ -17,7 +17,7 @@
 [Interview Guide](docs/interview-guide.md) ·
 [Resume Entry](docs/resume-project-entry.md)
 
-![Portfolio Analytics dashboard showing four historical metrics and asset allocation](docs/assets/dashboard-demo.png)
+![Ledger Lens dashboard showing four historical metrics and asset allocation](docs/assets/dashboard-demo.png)
 
 The 1080p [three-minute narrated walkthrough](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4)
 covers the public full-stack workflow, financial methodology, deterministic AI
