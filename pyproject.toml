@@ -1,6 +1,6 @@
 [project]
 name = "portfolio-analytics-api"
-version = "0.1.0"
+version = "1.0.0rc1"
 description = "AI-powered portfolio analytics API"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -23,7 +23,7 @@ dependencies = [
 [tool.ruff]
 target-version = "py312"
 line-length = 88
-src = ["src", "tests"]
+src = ["src", "tests", "benchmarks", "scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
@@ -34,7 +34,7 @@ quote-style = "double"
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src", "tests"]
+files = ["src", "tests", "benchmarks", "scripts"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --strict-config --strict-markers"
@@ -58,6 +58,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "httpx>=0.28.1",
+    "locust>=2.43,<3",
     "mypy>=2.3.0",
     "pandas-stubs>=2.2",
     "pytest>=9.1.1",

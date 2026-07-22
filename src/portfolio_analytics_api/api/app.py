@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
@@ -6,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from portfolio_analytics_api.api.auth_routes import build_auth_router
+from portfolio_analytics_api.api.observability import RequestObservabilityMiddleware
 from portfolio_analytics_api.api.routes import build_portfolio_router
 from portfolio_analytics_api.application import (
     AccessTokenService,
@@ -36,6 +38,8 @@ from portfolio_analytics_api.domain import (
     InvalidTransactionError,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def create_app(
     unit_of_work_factory: UnitOfWorkFactory,
@@ -53,6 +57,7 @@ def create_app(
             await shutdown_callback()
 
     app = FastAPI(title="Portfolio Analytics API", lifespan=lifespan)
+    app.add_middleware(RequestObservabilityMiddleware)
     authentication_service = AuthenticationService(
         unit_of_work_factory=unit_of_work_factory,
         password_hasher=password_hasher,
@@ -94,12 +99,12 @@ def create_app(
 
     @app.exception_handler(EmailAlreadyRegisteredError)
     async def email_already_registered_handler(
-        _request: Request, error: EmailAlreadyRegisteredError
+        _request: Request, _error: EmailAlreadyRegisteredError
     ) -> JSONResponse:
         return _error_response(
             status.HTTP_409_CONFLICT,
             "email_already_registered",
-            str(error),
+            "email is already registered",
         )
 
     @app.exception_handler(PortfolioNotFoundError)
@@ -233,6 +238,14 @@ def _error_response(
     message: str,
     headers: dict[str, str] | None = None,
 ) -> JSONResponse:
+    logger.info(
+        "http error response",
+        extra={
+            "event": "http.error",
+            "status_code": status_code,
+            "error_category": code,
+        },
+    )
     return JSONResponse(
         status_code=status_code,
         content={"error": {"code": code, "message": message}},

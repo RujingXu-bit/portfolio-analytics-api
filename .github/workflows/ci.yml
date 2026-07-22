@@ -10,6 +10,40 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      APP_ENV: test
+      LOG_LEVEL: WARNING
+      DATABASE_URL: postgresql+asyncpg://portfolio_test:portfolio_test_local_only@localhost:5432/portfolio_test
+      TEST_DATABASE_URL: postgresql+asyncpg://portfolio_test:portfolio_test_local_only@localhost:5432/portfolio_test
+      REDIS_URL: redis://localhost:6379/0
+      TEST_REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET_KEY: ci-only-jwt-secret-key-with-at-least-32-characters
+      DEEPSEEK_API_KEY: ""
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: portfolio_test
+          POSTGRES_PASSWORD: portfolio_test_local_only
+          POSTGRES_USER: portfolio_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U portfolio_test -d portfolio_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
 
     steps:
       - name: Check out repository
@@ -33,3 +67,13 @@ jobs:
       - name: Run unit tests
         run: make test
 
+      - name: Upgrade empty database and check migrations
+        run: |
+          make db-upgrade
+          make db-check
+
+      - name: Run PostgreSQL and Redis integration tests
+        run: make test-integration
+
+      - name: Build and smoke runtime image
+        run: make image-smoke

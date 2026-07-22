@@ -17,8 +17,8 @@
 
 ### 当前状态
 
-- 项目阶段：Week 4 已完成，W4.1–W4.4 与 W4.R 已通过验收。
-- 当前优先任务：`W5.1`。
+- 项目阶段：Week 5 已完成，`v1.0.0-rc.1` 候选版本已通过验收。
+- 当前优先任务：无；Backlog 仍需由本文件明确重新排期后才能启动。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
 
@@ -440,7 +440,7 @@ MarketDataProvider ---- Redis Cache
 
 ### Week 5：质量、性能与求职交付（20–25小时）
 
-#### [ ] W5.1 可观测性和安全检查（4–5h）
+#### [x] W5.1 可观测性和安全检查（4–5h）
 
 依赖：W4.R。
 
@@ -455,7 +455,7 @@ MarketDataProvider ---- Redis Cache
 - 日志不包含密码、JWT或API Key。
 - 一次请求可以通过 request ID 追踪主要路径。
 
-#### [ ] W5.2 负载测试与实测指标（4–6h）
+#### [x] W5.2 负载测试与实测指标（4–6h）
 
 依赖：W3.3、W5.1。
 
@@ -471,7 +471,7 @@ MarketDataProvider ---- Redis Cache
 - README只引用实际测得的数字。
 - 不将本地轻量测试描述为生产容量证明。
 
-#### [ ] W5.3 完善CI与干净环境验证（4–5h）
+#### [x] W5.3 完善CI与干净环境验证（4–5h）
 
 依赖：W2.4、W4.2、W4.R。
 
@@ -487,7 +487,7 @@ MarketDataProvider ---- Redis Cache
 - 从空数据库执行migration并完成集成测试。
 - 失败的质量检查会使CI失败。
 
-#### [ ] W5.4 完成README和架构文档（4–5h）
+#### [x] W5.4 完成README和架构文档（4–5h）
 
 依赖：W5.2、W5.3。
 
@@ -503,7 +503,7 @@ MarketDataProvider ---- Redis Cache
 - 新用户只看README即可在干净环境启动项目。
 - 文档没有未实现功能或虚构指标。
 
-#### [ ] W5.5 发布候选版本与演示准备（3–4h）
+#### [x] W5.5 发布候选版本与演示准备（3–4h）
 
 依赖：W5.1–W5.4。
 
@@ -585,6 +585,100 @@ GET  /health
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] W5.5 完成 `v1.0.0-rc.1` 候选版本与演示准备：项目包版本更新为
+  `1.0.0rc1` 并同步 `uv.lock`，新增候选 changelog、API 驱动演示命令、三分钟
+  讲稿及架构/金融口径面试问答。演示只通过公开 endpoint 创建唯一用户、
+  Portfolio、DEPOSIT 与 BUY，验证相同 BUY 的幂等 replay 后获取 analytics 和
+  insight；不手工修改数据库、不打临时补丁，也不输出密码或 JWT。
+- 候选干净环境从无 `.venv`、无 `.env` 的临时副本执行 `uv sync --locked`；
+  独立 Compose project 使用全新开发/测试 PostgreSQL 与 Redis、独立端口和
+  测试卷。开发空库 `alembic upgrade head`/`check` 通过，随后 `make check` 与
+  `make test-all` 全部通过。真实应用启动后，AAPL 2026-01-02 至 2026-01-30
+  的演示成功返回四项指标、`stale=false`、同 ID 幂等 replay 和
+  `deterministic_rules` insight；无需 DeepSeek 凭据。所有临时容器、网络、
+  卷与目录均已清理。
+- 最终候选门禁：`make check` 通过 Ruff、format、严格 mypy（80 个源文件）
+  和 158 项离线单元测试，综合覆盖率 89%；`make test-all` 的 170 项单元与
+  集成测试通过，综合覆盖率 93%；`make image-smoke` 成功构建仅含 production
+  依赖、以 UID `10001` 运行的镜像并通过 health/request-ID 冒烟。`uv build`
+  成功生成 `portfolio_analytics_api-1.0.0rc1` sdist 与 wheel，元数据确认
+  `Version: 1.0.0rc1`、`Requires-Python: >=3.12`；`uv lock --check`、
+  `docker compose config --quiet` 与 `git diff --check` 通过。
+- 项目级完成定义逐项复核通过：核心持久化流程、空库 migration、Fake/真实
+  Provider、四项指标及 methodology、Redis/retry/stale、JWT/所有权、LLM
+  确定性回退、离线 CI、容器/README/演示干净环境和可复现实测指标均有当前
+  测试或运行证据。已知限制继续在 README 与 changelog 明示；本次只创建本地
+  候选分支、提交与 annotated tag，不 push、不建 PR、不对外发布。
+
+- [x] W5.4 完成 README 与交付文档：README 现包含锁定安装、完整环境变量、
+  基础设施/空库 migration/启动、运行镜像、认证与所有 9 个已实现 endpoint
+  示例、统一错误和 `X-Request-ID`、金融 methodology、缓存/retry/stale、LLM
+  回退、安全边界、测试/CI/负载命令，以及 W5.2 的原始实测环境和数字。文档
+  明确未实现 portfolio 列表、insight 历史、第二 Provider、前端、生产部署或
+  已发布 V1，未扩大当前范围。
+- `docs/architecture.md`、`docs/decisions.md` 与 `docs/performance.md` 已统一
+  request/logging 路径、离线 CI、非 root production-only 镜像、独立 migration、
+  降级策略及本机合成上游性能边界。临时目录中的干净副本确认初始无 `.venv`
+  和 `.env`，随后用锁文件安装，在独立 Compose project/端口上从空 `_test`
+  数据库 migration/check，启动 API，并通过 health 200、注册 201、登录 200 与
+  UUID request ID 冒烟；本次临时容器、网络、测试卷和目录均已清理。
+- 最终验证：`make check` 通过 Ruff、format、严格 mypy（78 个源文件）和
+  156 项离线单元测试，综合覆盖率 89%；`make test-all` 的 168 项单元与集成
+  测试通过，综合覆盖率 93%；`make image-smoke` 成功构建只含 production
+  依赖、以 UID `10001` 运行的镜像并通过容器健康冒烟；`uv lock --check`、
+  `docker compose config --quiet` 与 `git diff --check` 通过。W5.2 后未改动
+  运行时或 benchmark 路径，因此按计划未重复负载实测。下一步仅为尚未执行的
+  `W5.5`。
+
+- [x] W5.3 完善离线 CI 与运行镜像：GitHub Actions 使用固定 uv 版本和锁文件，
+  启动临时 PostgreSQL 16/Redis 7 后依次执行 Ruff、format、严格 mypy、离线
+  单元测试、空 `_test` 库 Alembic upgrade/check、集成测试及镜像构建/健康
+  冒烟；CI 仅使用无秘密测试配置，不运行 yfinance/DeepSeek contract tests。
+- 新增 Python 3.12 slim 运行镜像与 `.dockerignore`；镜像仅安装 production
+  依赖、包含 migration，并以非 root UID `10001` 运行。`make image-smoke`
+  成功构建镜像，核验非 root 用户并在随机 loopback 端口启动临时容器，`/health`
+  与 `X-Request-ID` 冒烟通过。migration 仍是独立部署步骤，不在应用启动时隐式
+  执行。
+- 本机以 CI 同等无秘密环境验证：空 `_test` schema 从零升级到 head，
+  `alembic check` 无漂移，12 项 PostgreSQL/Redis 集成测试通过；
+  `docker compose config --quiet` 通过；`make check` 通过 Ruff、format、mypy
+  （78 个源文件）和 156 项离线单元测试，综合覆盖率 89%；`make test-all` 的
+  168 项单元与集成测试通过，综合覆盖率 93%；`uv lock --check` 与
+  `git diff --check` 通过。下一步：执行 `W5.4`。
+
+- [x] W5.2 完成可复现 Locust 冷/热缓存负载测试：单进程 Uvicorn 使用真实
+  FastAPI、认证、PostgreSQL Repository、Redis cache 与 analytics 路径，仅将
+  yfinance 替换为固定 50ms 延迟的确定性 Provider；fixture 为 1 个用户、1 个
+  Portfolio、1 笔 BUY、1 个 symbol 和 2,000 个价格点。测试使用隔离 `_test`
+  数据库与唯一 Redis namespace，不访问真实 Provider 或 LLM。
+- 正式实测环境为 macOS 26.5.2 arm64、Python 3.12.13、Locust 2.46.1、
+  PostgreSQL 16、Redis 7、10 用户以 2 用户/秒生成、每场景 60 秒。冷缓存使用
+  唯一 60–252 日区间：7,448 请求，P50 66ms、P95 120ms、124.343 req/s、
+  0 错误、0% cache hit；日志核对 7,448 miss/Provider calls，Provider P50/P95
+  为 51.000/52.023ms。热缓存使用预热 252 日区间：25,020 请求，P50 22ms、
+  P95 34ms、417.561 req/s、0 错误、100% cache hit，测量区间无 Provider 调用。
+- `docs/performance.md` 明确这些数字是本机、单 worker、合成上游的缓存路径对比，
+  不是生产容量证明。验证：4 项 benchmark 单元测试通过；`make load-test` 从空
+  测试库 migration 后完成两场景并交叉校验 Locust/JSON 日志；`make check`
+  通过 Ruff、format、mypy（75 个源文件）和 150 项离线单元测试，综合覆盖率
+  89%；`make test-all` 的 162 项单元与集成测试通过，综合覆盖率 93%；
+  `uv lock --check` 与 `git diff --check` 通过。下一步：执行 `W5.3`。
+
+- [x] W5.1 完成可观测性和安全检查：所有 HTTP 请求使用 UUID request ID，
+  合法 `X-Request-ID` 会规范化并贯穿响应，缺失或非法值由服务端替换；异步
+  request context 将 HTTP、cache、Provider 和 insight 回退事件关联到同一 ID。
+  应用与 Uvicorn 统一输出 UTC 单行 JSON，仅序列化固定白名单字段，不记录
+  request body、query、Authorization、配置、缓存 payload 或异常原文。
+- 市场数据 Provider 在 retry 边界内记录每次真实调用的 latency、outcome 和
+  稳定错误类别；market-data/insight cache 使用可统计的 hit、miss、stale、
+  bypass、corrupt 事件。未处理异常返回通用 500，重复邮箱响应不再回显邮箱。
+  12 项聚焦测试覆盖并发 request ID 隔离、非法 ID、JSON schema、全部 Provider
+  错误类别，以及密码、JWT、API Key 和异常内容哨兵不泄漏。
+- 验证：`make check` 通过 Ruff、format、mypy（68 个源文件）和 146 项离线
+  单元测试，综合覆盖率 89%；隔离 PostgreSQL/Redis 上 `make test-all` 的 158
+  项单元与集成测试全部通过，综合覆盖率 93%；`uv lock --check` 和
+  `git diff --check` 通过。下一步：执行 `W5.2 负载测试与实测指标`。
 
 - [x] W4.R Week 4 里程碑审查通过。Review baseline：
   `main@e0032f441588f928b004ed308b7fea599339d27d`；`HEAD == origin/main: yes`；

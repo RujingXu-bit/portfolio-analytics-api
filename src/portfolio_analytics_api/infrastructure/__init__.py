@@ -8,6 +8,7 @@ from portfolio_analytics_api.infrastructure.insights import (
 )
 from portfolio_analytics_api.infrastructure.market_data import (
     CachedMarketDataProvider,
+    ObservedMarketDataProvider,
     RetryingMarketDataProvider,
     YFinanceMarketDataProvider,
 )
@@ -32,6 +33,7 @@ __all__ = [
     "InMemoryTransactionRepository",
     "InMemoryUnitOfWork",
     "JwtAccessTokenService",
+    "ObservedMarketDataProvider",
     "RetryingMarketDataProvider",
     "YFinanceMarketDataProvider",
 ]

@@ -1,5 +1,101 @@
 # Architecture Decisions
 
+## 2026-07-22: Offline CI and non-root runtime image
+
+### Context
+
+W5.3 must prove the locked project can pass quality checks, migrate an empty
+database, exercise PostgreSQL/Redis integration, and start from its runtime
+image without local `.env` state or external provider credentials.
+
+### Decision
+
+- Run one fail-fast GitHub Actions job with PostgreSQL 16 and Redis 7 service
+  containers, CI-only settings, the pinned uv release, and `uv sync --locked`.
+- Run Ruff and formatting, strict mypy, offline unit tests, empty `_test`
+  database migration/check, integration tests, and the image smoke in order.
+  Keep yfinance and DeepSeek contract tests opt-in.
+- Build from Python 3.12 slim, install only locked production dependencies,
+  include Alembic files, and run the application as numeric non-root user
+  `10001`.
+- Keep migration separate from application startup. The image smoke verifies
+  its configured user, `/health`, and `X-Request-ID` through an ephemeral
+  container bound to a random loopback port.
+- Exclude source-control metadata, local environments, tests, documentation,
+  benchmark artifacts, and Compose state from the Docker build context.
+
+### Trade-offs
+
+One ordered job is slower than maximally parallel CI, but makes the empty-
+database and integration sequence explicit and stops on the first failure. The
+slim image is reproducible and runs with reduced privilege, but it is not a
+complete production deployment: migrations, TLS, secret injection,
+orchestration, and publishing remain separate responsibilities.
+
+## 2026-07-22: Offline Locust cache-path benchmark
+
+### Context
+
+W5.2 requires reproducible cold/hot measurements without presenting a local
+test as production capacity or placing sustained traffic on yfinance. The
+measurement must include the real authenticated API, repository, cache, and
+analytics path and must derive cache hit rate from observed events.
+
+### Decision
+
+- Use Locust from the existing Python/uv toolchain and run one local Uvicorn
+  worker against disposable PostgreSQL 16 and Redis 7 test services.
+- Seed one user, portfolio, BUY, symbol, and 2,000 deterministic price bars.
+  Replace only yfinance with a deterministic provider delayed by 50 ms.
+- Sustain cold misses with unique 60–252 day cache keys; prewarm and repeat one
+  252-day key for the hot run. Use 10 users, 2 users/second spawn rate, and 60
+  seconds per scenario.
+- Read P50/P95 and request counts from Locust's final response-time histogram;
+  calculate cache hit rate and provider latency from W5.1 JSON events. Fail the
+  run on any request error or disagreement between request, cache, and provider
+  counts.
+- Keep raw run artifacts ignored and publish only measured results together
+  with the complete environment, workload, command, and limitations.
+
+### Trade-offs
+
+The synthetic upstream makes the comparison stable and avoids third-party
+traffic, but does not model yfinance, TLS, multiple workers, production hosts,
+or distributed clients. The numbers therefore demonstrate cache-path behavior
+and reproducibility only, not deployment capacity.
+
+## 2026-07-22: Correlated allowlisted JSON logs
+
+### Context
+
+W5.1 requires one request to be traceable across HTTP, cache, and market-data
+provider boundaries without putting passwords, tokens, API keys, or arbitrary
+request content into logs. Provider latency must describe actual upstream calls
+rather than cached responses.
+
+### Decision
+
+- Assign every request a UUID and return it as `X-Request-ID`; retain only a
+  valid client-supplied UUID and replace malformed values without logging them.
+- Propagate the request ID with `ContextVar` and serialize application and
+  Uvicorn logs as one-line UTC JSON using a fixed field allowlist.
+- Log HTTP method, route template, status, latency, stable outcome/error
+  category, cache status, provider identity, symbol, and exception type only.
+  Never log request bodies, queries, headers, settings, cache payloads, or raw
+  exception text.
+- Observe the real provider inside the retry boundary. Each attempt has a
+  latency/error event; cache hits and misses remain separate cache events.
+- Return a generic error body for unexpected exceptions and a non-identifying
+  message for duplicate registration.
+
+### Trade-offs
+
+Allowlisted logs contain less forensic detail than raw requests or stack
+messages, so debugging relies on stable categories, exception types, and the
+request ID. This intentionally favors credential and personal-data safety.
+Accepting valid caller IDs supports distributed correlation, while UUID-only
+validation prevents untrusted text from becoming a log field.
+
 ## 2026-07-22: Optional DeepSeek narrative with deterministic authority
 
 ### Context
