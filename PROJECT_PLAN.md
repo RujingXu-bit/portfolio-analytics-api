@@ -247,11 +247,31 @@ MarketDataProvider ---- Redis Cache
   - `GET /portfolios/{id}/analytics`
 - 数据在应用重启后仍然存在。
 
+#### [x] W2.R Week 2里程碑审查（2–3h）
+
+依赖：W2.1、W2.2、W2.3、W2.4。
+
+工作内容：
+
+- 根据本计划逐项验证 W2.1–W2.4 的验收标准与完成状态。
+- 运行 `make check` 和 `make test-cov`，记录命令、结果及失败原因。
+- 审查金融计算正确性与边界测试、领域层依赖边界、测试网络隔离和数据库测试隔离。
+- 按 P0、P1、P2、P3 输出带文件和行号的问题，并给出 PASS、CONDITIONAL PASS 或 FAIL 结论。
+
+验收标准：
+
+- W2.1–W2.4 的全部验收标准均由当前仓库事实和可复现验证支持。
+- `make check` 和 `make test-cov` 均成功运行，W2 PostgreSQL 集成测试通过。
+- 不存在未解决的 P0 或 P1 问题，P2 和 P3 问题均已记录处置结论。
+- 最终审查结论为 PASS；CONDITIONAL PASS 或 FAIL 均不视为通过，不得勾选本任务。
+
+里程碑门禁：`W2.R` 勾选完成前，不得启动任何 W3 任务。完成审查但结论未通过时保持 `[ ]`，在进度日志记录阻塞项并完成整改后重新审查。
+
 ### Week 3：市场数据、Redis与韧性（26–33小时）
 
 #### [ ] W3.1 实现第一个真实 Provider（6–8h）
 
-依赖：W1.4。
+依赖：W1.4、W2.R。
 
 工作内容：
 
@@ -544,6 +564,11 @@ GET  /health
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] W2.R 在最新 `origin/main` 基线 `f4c16ab4c2f2f2205ee943394cc62f8cde0d27ba` 完成 Week 2 里程碑审查；审查开始时本地 `main` 与 `origin/main` 完全一致且工作区干净，最终结论为 PASS。
+- 验证：`make check` 通过，Ruff、format、mypy（40 个源文件）和 58 项单元测试通过，branch coverage 为 86%；`make test-cov` 通过，最终全套 64 项测试通过，综合 branch coverage 为 94%；PostgreSQL 16、Redis 7 和隔离测试 PostgreSQL 健康检查通过；空库 migration、Repository 幂等与并发规则、五个持久化 API endpoint 和 engine 重建后的数据持久性均由集成测试覆盖。
+- 审查未发现 P0 或 P1。P2：`Makefile` 重复定义 `test-cov`，导致单元测试重复运行且实际包含集成测试，与 README 的离线单元测试说明不一致，纳入后续质量修复；当前单标的 analytics 仍是标的价格序列指标而非交易时点、现金流和权重驱动的完整组合收益，已由必需任务 W3.5 承接，并作为 W4.3 的前置依赖。P3：`.PHONY` 未覆盖全部公开 Make target，纳入后续质量修复。
+- W2.1–W2.4 的完成状态与仓库事实一致；`W2.R` 通过后解除 W3 门禁，下一步：执行 `W3.1 实现第一个真实 Provider`。
 
 - [x] W2.4 完成持久化交易垂直切片：`POST /portfolios`、`GET /portfolios/{id}`、`POST/GET /portfolios/{id}/transactions` 和 `GET /portfolios/{id}/analytics` 均通过应用服务与请求级 Unit of Work 访问 PostgreSQL；路由不包含 SQL 或金融算法。
 - Portfolio 创建与交易创建已分离，Portfolio 保存单一 base currency；交易请求验证字段组合、时区和 Decimal 精度。首次交易创建返回 201，相同幂等重试返回原记录和 200，不同 payload 返回稳定 409；超卖返回稳定 422。应用启动不执行 migration，engine 在 lifespan 关闭。
