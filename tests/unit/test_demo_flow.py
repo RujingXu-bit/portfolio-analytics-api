@@ -41,7 +41,7 @@ def test_demo_runs_owned_idempotent_analytics_and_insight_flow() -> None:
                 201,
                 {
                     "id": portfolio_id,
-                    "name": "V1 release candidate demo",
+                    "name": "V1 release demo",
                     "base_currency": "USD",
                 },
             )
@@ -50,7 +50,7 @@ def test_demo_runs_owned_idempotent_analytics_and_insight_flow() -> None:
                 200,
                 {
                     "id": portfolio_id,
-                    "name": "V1 release candidate demo",
+                    "name": "V1 release demo",
                     "base_currency": "USD",
                 },
             )

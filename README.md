@@ -11,10 +11,10 @@ This V1 does not predict prices, automate trades, or guarantee returns. The LLM
 never calculates or overrides financial metrics or the deterministic risk
 classification. Unit tests and normal CI are fully offline.
 
-Current candidate: `1.0.0rc1` / Git tag `v1.0.0-rc.1`. See the
-[candidate changelog](CHANGELOG.md), [three-minute demo](docs/demo.md), and
-[interview guide](docs/interview-guide.md). A release candidate is not a
-general-availability or production-capacity claim.
+Current release: `1.0.0` / Git tag `v1.0.0`. See the
+[release changelog](CHANGELOG.md), [three-minute demo](docs/demo.md), and
+[interview guide](docs/interview-guide.md). This is a portfolio-project V1,
+not a production-capacity claim or investment-advice service.
 
 完全不懂代码的使用者请从
 [中文零基础项目说明](docs/项目说明-零基础.md)开始。
@@ -92,7 +92,7 @@ The response is `200 {"status":"ok"}` and includes an `X-Request-ID` header.
 Stop local services without deleting the PostgreSQL volume with
 `make infra-down`.
 
-After startup, `make demo` runs the complete API-driven candidate flow without
+After startup, `make demo` runs the complete API-driven V1 flow without
 manual database edits: registration/login, owned portfolio creation, DEPOSIT,
 idempotent BUY replay, analytics, and deterministic insight. The normal app's
 analytics call uses yfinance, so this live demo requires internet access. See
@@ -382,7 +382,7 @@ make test-all              # unit + integration tests with coverage
 make load-test             # offline cold/hot Locust benchmark
 make test-contract         # opt-in real yfinance contract
 make image-smoke           # build and health-check the runtime image
-make demo                  # public API release-candidate flow
+make demo                  # public API V1 release flow
 ```
 
 `make test-integration`, `make test-all`, and `make load-test` require the
@@ -399,11 +399,12 @@ Ruff, format checking, strict mypy over 78 source files, and the 156-test unit
 suite with 89% branch coverage. These are repository test results, not a claim
 about untested production environments.
 
-The `1.0.0rc1` candidate adds two focused demo-flow tests. Its final local and
-clean-environment gates passed 170 tests (158 unit, 12 integration) with 93%
-combined branch coverage; `make check` covered 80 source files and the 158-test
-unit suite at 89% branch coverage. The candidate wheel and source distribution
-also built successfully with Python requirement `>=3.12`.
+The formal `1.0.0` release gates passed 170 tests (158 unit, 12 integration)
+with 93% combined branch coverage; `make check` covered 80 source files and the
+158-test unit suite at 89% branch coverage. The non-root image smoke and the
+`1.0.0` wheel/source-distribution build also passed with Python requirement
+`>=3.12`; exact commands and results are recorded in `PROJECT_PLAN.md` and
+`CHANGELOG.md`.
 
 The reproducible W5.2 local load test used macOS 26.5.2 arm64, Python 3.12.13,
 Locust 2.46.1, one Uvicorn worker, PostgreSQL 16, Redis 7, 10 users spawned at
@@ -438,10 +439,10 @@ failure stops the job; external provider contracts are excluded.
 - The API provides historical analytics and informational risk explanations,
   not investment advice.
 
-The current scope has no `GET /portfolios`, insight-history API, refresh tokens,
-token revocation, second real market-data provider, frontend, automatic trading,
-multi-currency conversion, production deployment, or general-availability V1
-release.
+The current `v1.0.0` scope has no `GET /portfolios`, insight-history API,
+refresh tokens, token revocation, second real market-data provider, frontend,
+automatic trading, multi-currency conversion, rate limiting, or production
+deployment.
 
 ## Project structure
 
