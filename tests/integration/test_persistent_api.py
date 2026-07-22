@@ -1,10 +1,11 @@
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
 from fastapi import FastAPI
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from portfolio_analytics_api.api import create_app
@@ -28,6 +29,7 @@ from portfolio_analytics_api.infrastructure.database import (
 )
 from portfolio_analytics_api.infrastructure.database.models import (
     AnalysisSnapshotRecord,
+    PortfolioRecord,
 )
 
 PRICES = (
@@ -106,6 +108,55 @@ async def authenticate(
     token = str(login.json()["access_token"])
     client.headers["Authorization"] = f"Bearer {token}"
     return token
+
+
+@pytest.mark.anyio
+async def test_portfolio_list_is_persisted_owner_scoped_and_paginated(
+    database_engine: AsyncEngine,
+) -> None:
+    app = build_test_app(database_engine)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await authenticate(client)
+        created = []
+        for name in ("First", "Second", "Third"):
+            response = await client.post("/portfolios", json={"name": name})
+            assert response.status_code == 201
+            created.append(response.json())
+
+        session_factory = create_session_factory(database_engine)
+        async with session_factory() as session:
+            for index, portfolio in enumerate(created):
+                await session.execute(
+                    update(PortfolioRecord)
+                    .where(PortfolioRecord.id == UUID(portfolio["id"]))
+                    .values(created_at=datetime(2026, 1, index + 1, tzinfo=UTC))
+                )
+            await session.commit()
+
+        page = await client.get("/portfolios", params={"limit": 2, "offset": 1})
+
+        await authenticate(
+            client,
+            email="other@example.com",
+            password="persistent other password",
+        )
+        other_page = await client.get("/portfolios")
+
+    assert page.status_code == 200
+    assert page.json() == {
+        "items": [created[1], created[0]],
+        "total": 3,
+        "limit": 2,
+        "offset": 1,
+    }
+    assert other_page.status_code == 200
+    assert other_page.json() == {
+        "items": [],
+        "total": 0,
+        "limit": 20,
+        "offset": 0,
+    }
 
 
 @pytest.mark.anyio
@@ -317,3 +368,91 @@ async def test_generated_insight_persists_model_prompt_and_input_summary(
     assert snapshot.metrics["asset_weights"] == [{"symbol": "DEMO", "weight": "1"}]
     assert snapshot.methodology["price_basis"] == "adjusted_close"
     assert snapshot.generated_at is not None
+
+
+@pytest.mark.anyio
+async def test_insight_history_reads_legacy_rc_rows_and_enforces_ownership(
+    database_engine: AsyncEngine,
+) -> None:
+    app = build_test_app(database_engine)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await authenticate(client)
+        portfolio = await client.post("/portfolios", json={"name": "History"})
+        portfolio_id = portfolio.json()["id"]
+        transaction = await client.post(
+            f"/portfolios/{portfolio_id}/transactions", json=buy_payload()
+        )
+        assert transaction.status_code == 201
+        generated = await client.post(
+            f"/portfolios/{portfolio_id}/insights",
+            params={"start_date": "2026-01-02", "end_date": "2026-01-06"},
+        )
+        assert generated.status_code == 200
+
+        session_factory = create_session_factory(database_engine)
+        async with session_factory() as session:
+            current = await session.scalar(
+                select(AnalysisSnapshotRecord).where(
+                    AnalysisSnapshotRecord.portfolio_id == UUID(portfolio_id)
+                )
+            )
+            assert current is not None
+            legacy_id = uuid4()
+            legacy_generated_at = current.generated_at + timedelta(seconds=1)
+            session.add(
+                AnalysisSnapshotRecord(
+                    id=legacy_id,
+                    portfolio_id=UUID(portfolio_id),
+                    as_of=current.as_of,
+                    metrics=current.metrics,
+                    methodology=current.methodology,
+                    summary=None,
+                    generator=None,
+                    model_name=None,
+                    prompt_version=None,
+                    generated_at=legacy_generated_at,
+                )
+            )
+            await session.commit()
+
+        history = await client.get(
+            f"/portfolios/{portfolio_id}/insights",
+            params={"limit": 1, "offset": 0},
+        )
+        second_page = await client.get(
+            f"/portfolios/{portfolio_id}/insights",
+            params={"limit": 1, "offset": 1},
+        )
+
+        await authenticate(
+            client,
+            email="other@example.com",
+            password="persistent other password",
+        )
+        forbidden = await client.get(f"/portfolios/{portfolio_id}/insights")
+
+    assert history.status_code == 200
+    assert history.json() == {
+        "items": [
+            {
+                "id": str(legacy_id),
+                "as_of": "2026-01-06",
+                "metrics": current.metrics,
+                "methodology": current.methodology,
+                "summary": None,
+                "generator": None,
+                "model_name": None,
+                "prompt_version": None,
+                "generated_at": legacy_generated_at.isoformat().replace("+00:00", "Z"),
+            }
+        ],
+        "total": 2,
+        "limit": 1,
+        "offset": 0,
+    }
+    assert second_page.status_code == 200
+    assert second_page.json()["total"] == 2
+    assert second_page.json()["items"][0]["generator"] == "deterministic_rules"
+    assert forbidden.status_code == 404
+    assert forbidden.json()["error"]["code"] == "portfolio_not_found"

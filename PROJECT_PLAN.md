@@ -18,7 +18,7 @@
 ### 当前状态
 
 - 项目阶段：后端正式版 `v1.0.0` 已发布，进入 Post-V1 公开演示增强阶段。
-- 当前优先任务：`E1.1`，实现 Portfolio 列表与 AnalysisSnapshot 历史查询。
+- 当前优先任务：`E1.2`，实现公网限流、部署配置并发布后端 `v1.1.0`。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
 - Post-V1 后端目标版本：`v1.1.0`；独立 Web 前端目标版本：`v1.0.0`。
@@ -614,7 +614,7 @@ Release 指向同一已验证提交；未合并分支和版本 tags 未被删除
 
 ### P1：公开全栈演示
 
-#### [ ] E1.1 Portfolio 与 AnalysisSnapshot 查询接口（10–14h）
+#### [x] E1.1 Portfolio 与 AnalysisSnapshot 查询接口（10–14h）
 
 依赖：R1.2。
 
@@ -720,6 +720,21 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] E1.1 完成前端依赖的查询能力：新增认证后的 `GET /portfolios` 与
+  `GET /portfolios/{id}/insights`，统一返回 `items/total/limit/offset`；limit
+  默认 20、最大 100。PostgreSQL Portfolio 按 `created_at/id` 倒序，snapshot
+  按 `generated_at/id` 倒序；应用服务先执行所有权校验，外部用户和不存在资源
+  继续使用相同 `portfolio_not_found` 404。
+- snapshot API 结构化返回现有指标、methodology、summary、generator、model、
+  prompt version 与生成时间；初始 schema 中可空的 RC narrative/provenance 字段
+  保持可读并输出 `null`，没有新增 migration。OpenAPI、README、架构说明与决策
+  记录已同步。
+- 验证：`make check` 通过 Ruff、format、严格 mypy（80 个源文件）和 164 项
+  离线单元测试，branch coverage 为 89%；`make test-all` 的 178 项单元/集成
+  测试全部通过，综合 branch coverage 为 93%，覆盖分页排序、总数、跨用户隔离、
+  PostgreSQL 持久化和旧 RC snapshot；`uv lock --check`、`make db-check` 与
+  `git diff --check` 通过。下一步：执行 `E1.2`。
 
 - [x] R1.2 发布后端正式版 `v1.0.0`。起始发布基线为
   `main@9315cf9920483383fdc3e80e39dbe84412e15042`，且

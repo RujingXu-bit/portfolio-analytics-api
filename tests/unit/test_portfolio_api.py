@@ -123,6 +123,84 @@ async def create_portfolio(client: httpx.AsyncClient) -> str:
 
 
 @pytest.mark.anyio
+async def test_portfolio_list_is_owner_scoped_newest_first_and_paginated() -> None:
+    async with api_client({}) as client:
+        created = []
+        for name in ("First", "Second", "Third"):
+            response = await client.post("/portfolios", json={"name": name})
+            assert response.status_code == 201
+            created.append(response.json())
+
+        page = await client.get("/portfolios", params={"limit": 2, "offset": 1})
+
+        second_login = await client.post(
+            "/auth/register",
+            json={
+                "email": "other@example.com",
+                "password": "another owner password",
+            },
+        )
+        assert second_login.status_code == 201
+        login = await client.post(
+            "/auth/login",
+            json={
+                "email": "other@example.com",
+                "password": "another owner password",
+            },
+        )
+        other_page = await client.get(
+            "/portfolios",
+            headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+        )
+
+    assert page.status_code == 200
+    assert page.json() == {
+        "items": [created[1], created[0]],
+        "total": 3,
+        "limit": 2,
+        "offset": 1,
+    }
+    assert other_page.status_code == 200
+    assert other_page.json() == {
+        "items": [],
+        "total": 0,
+        "limit": 20,
+        "offset": 0,
+    }
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/portfolios?limit=0",
+        "/portfolios?limit=101",
+        "/portfolios?offset=-1",
+    ],
+)
+async def test_portfolio_list_rejects_invalid_pagination(path: str) -> None:
+    async with api_client({}) as client:
+        response = await client.get(path)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+@pytest.mark.anyio
+async def test_openapi_exposes_paginated_portfolio_and_snapshot_queries() -> None:
+    async with api_client({}) as client:
+        response = await client.get("/openapi.json")
+
+    assert response.status_code == 200
+    paths = response.json()["paths"]
+    assert "get" in paths["/portfolios"]
+    assert "get" in paths["/portfolios/{portfolio_id}/insights"]
+    schemas = response.json()["components"]["schemas"]
+    assert "PortfolioPageResponse" in schemas
+    assert "AnalysisSnapshotPageResponse" in schemas
+
+
+@pytest.mark.anyio
 async def test_persistent_api_returns_portfolio_transactions_and_metrics() -> None:
     prices = (
         PriceBar("DEMO", date(2026, 1, 2), Decimal("100")),
@@ -297,6 +375,7 @@ async def test_missing_portfolio_has_stable_not_found_errors() -> None:
                 f"/portfolios/{portfolio_id}/analytics",
                 params={"start_date": "2026-01-01", "end_date": "2026-01-31"},
             ),
+            await client.get(f"/portfolios/{portfolio_id}/insights"),
         )
 
     assert all(response.status_code == 404 for response in responses)
@@ -310,11 +389,19 @@ async def test_missing_portfolio_has_stable_not_found_errors() -> None:
 async def test_portfolio_routes_require_bearer_authentication() -> None:
     async with api_client({}) as client:
         del client.headers["Authorization"]
-        response = await client.post("/portfolios", json={"name": "Private"})
+        responses = (
+            await client.post("/portfolios", json={"name": "Private"}),
+            await client.get("/portfolios"),
+        )
 
-    assert response.status_code == 401
-    assert response.headers["www-authenticate"] == "Bearer"
-    assert response.json()["error"]["code"] == "authentication_failed"
+    assert all(response.status_code == 401 for response in responses)
+    assert all(
+        response.headers["www-authenticate"] == "Bearer" for response in responses
+    )
+    assert all(
+        response.json()["error"]["code"] == "authentication_failed"
+        for response in responses
+    )
 
 
 @pytest.mark.anyio
@@ -358,6 +445,9 @@ async def test_direct_id_guess_cannot_access_another_users_resources() -> None:
                 f"/portfolios/{portfolio_id}/insights",
                 params={"start_date": "2026-01-01", "end_date": "2026-01-31"},
                 headers=other_headers,
+            ),
+            await client.get(
+                f"/portfolios/{portfolio_id}/insights", headers=other_headers
             ),
         )
 
@@ -519,6 +609,59 @@ async def test_rule_based_insight_is_stable_and_offline() -> None:
     assert body["disclaimer"] == (
         "For informational purposes only; not investment advice."
     )
+
+
+@pytest.mark.anyio
+async def test_insight_history_is_newest_first_paginated_and_structured() -> None:
+    prices = (
+        PriceBar("DEMO", date(2026, 1, 2), Decimal("100")),
+        PriceBar("DEMO", date(2026, 1, 5), Decimal("110")),
+        PriceBar("DEMO", date(2026, 1, 6), Decimal("99")),
+    )
+    async with api_client({"DEMO": prices}) as client:
+        portfolio_id = await create_portfolio(client)
+        transaction = await client.post(
+            f"/portfolios/{portfolio_id}/transactions", json=buy_transaction()
+        )
+        assert transaction.status_code == 201
+        for _ in range(2):
+            insight = await client.post(
+                f"/portfolios/{portfolio_id}/insights",
+                params={"start_date": "2026-01-02", "end_date": "2026-01-06"},
+            )
+            assert insight.status_code == 200
+
+        full_page = await client.get(f"/portfolios/{portfolio_id}/insights")
+        second_page = await client.get(
+            f"/portfolios/{portfolio_id}/insights",
+            params={"limit": 1, "offset": 1},
+        )
+
+    assert full_page.status_code == 200
+    body = full_page.json()
+    assert body["total"] == 2
+    assert body["limit"] == 20
+    assert body["offset"] == 0
+    assert len(body["items"]) == 2
+    assert body["items"][0]["generated_at"] >= body["items"][1]["generated_at"]
+    snapshot = body["items"][0]
+    UUID(snapshot["id"])
+    assert snapshot["as_of"] == "2026-01-06"
+    assert snapshot["metrics"]["as_of"] == "2026-01-06"
+    assert snapshot["metrics"]["asset_weights"] == [{"symbol": "DEMO", "weight": "1"}]
+    assert snapshot["metrics"]["stale"] is False
+    assert snapshot["methodology"]["price_basis"] == "adjusted_close"
+    assert snapshot["summary"]
+    assert snapshot["generator"] == "deterministic_rules"
+    assert snapshot["model_name"] is None
+    assert snapshot["prompt_version"] == "risk-rules-v1"
+    assert second_page.status_code == 200
+    assert second_page.json() == {
+        "items": [body["items"][1]],
+        "total": 2,
+        "limit": 1,
+        "offset": 1,
+    }
 
 
 @pytest.mark.anyio

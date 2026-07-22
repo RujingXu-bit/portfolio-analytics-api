@@ -169,8 +169,8 @@ class AnalysisSnapshot:
     as_of: date
     metrics: dict[str, object]
     methodology: dict[str, object]
-    summary: str
-    generator: str
+    summary: str | None
+    generator: str | None
     model_name: str | None
-    prompt_version: str
+    prompt_version: str | None
     generated_at: datetime

@@ -1,5 +1,34 @@
 # Architecture Decisions
 
+## 2026-07-22: Owner-scoped offset pagination for dashboard queries
+
+### Context
+
+The independent web client needs to discover a user's portfolios and revisit
+persisted insight results. These reads must preserve the existing ownership
+boundary and remain compatible with nullable narrative provenance in RC-era
+snapshot rows without changing the database schema.
+
+### Decision
+
+- Add repository operations that filter portfolios by owner and snapshots by
+  parent portfolio, with separate scoped counts.
+- Return one consistent `items`, `total`, `limit`, `offset` envelope; default
+  `limit` to 20, cap it at 100, and reject negative offsets.
+- Order portfolios by `created_at` descending and snapshots by `generated_at`
+  descending, using UUID descending as a stable tie-breaker.
+- Verify parent ownership in the application service before reading snapshot
+  history, returning the same 404 used for missing portfolios.
+- Serialize only existing snapshot columns and keep historically nullable
+  summary, generator, model, and prompt-version fields nullable in the API.
+
+### Trade-offs
+
+Offset pagination is simple for a small portfolio showcase and provides an
+exact total, but large or rapidly changing datasets would favor cursor
+pagination. The two-query page/count pattern prioritizes a clear contract over
+one database-specific query; it can be revisited if measured load requires it.
+
 ## 2026-07-22: Offline CI and non-root runtime image
 
 ### Context

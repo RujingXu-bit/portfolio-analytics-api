@@ -30,10 +30,12 @@ from portfolio_analytics_api.application.ports import (
 )
 from portfolio_analytics_api.application.services import (
     AccessToken,
+    AnalysisSnapshotPage,
     AuthenticationService,
     NewTransaction,
     PortfolioAnalyticsService,
     PortfolioInsightService,
+    PortfolioPage,
     PortfolioService,
     TransactionCreation,
     TransactionService,
@@ -43,6 +45,7 @@ __all__ = [
     "AccessToken",
     "AccessTokenService",
     "AnalysisSnapshotRepository",
+    "AnalysisSnapshotPage",
     "AuthenticationError",
     "AuthenticationService",
     "EmailAlreadyRegisteredError",
@@ -65,6 +68,7 @@ __all__ = [
     "PortfolioInsightService",
     "PortfolioAnalyticsUnavailableError",
     "PortfolioNotFoundError",
+    "PortfolioPage",
     "PortfolioRepository",
     "PortfolioService",
     "TransactionCreation",

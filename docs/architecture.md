@@ -49,6 +49,15 @@ requested interval, requests their date-bounded price series concurrently, and
 composes the cash-flow-adjusted valuation and four domain metrics into
 `PortfolioAnalytics`.
 
+Dashboard query use cases also stay behind repository ports. Portfolio listing
+filters by the authenticated owner before applying newest-first creation order,
+then `limit`/`offset`; snapshot history first verifies ownership of the parent
+portfolio and then applies newest-first generation order and the same page
+shape. Both use an ID tie-breaker and a separate owner-scoped count. The
+snapshot response maps only already-persisted JSON and provenance columns, so
+it requires no migration and preserves nullable narrative fields from RC-era
+rows.
+
 All portfolio routes resolve the current user through one Bearer-token
 dependency, but authorization remains an application-service invariant rather
 than a route-only check. Creation assigns the authenticated user as owner;
@@ -132,8 +141,9 @@ the input, cache value, snapshot, response, or log message.
 ## Current scope
 
 The API persists Portfolio and Transaction resources and exposes creation,
-lookup, ordered transaction listing, and multi-asset analytics. Data survives
-process and engine recreation. The Week 3 market-data path uses yfinance behind
+owner-scoped portfolio listing and lookup, ordered transaction listing, and
+multi-asset analytics. Data survives process and engine recreation. The Week 3
+market-data path uses yfinance behind
 Redis cache, bounded retry/deadline handling, stable upstream errors, and
 explicit stale metadata. W4.1 provides registration, login, password hashing,
 and access-token validation. W4.2 requires Bearer authentication for every
@@ -141,7 +151,7 @@ portfolio resource and enforces ownership in both application services and the
 database schema.
 W4.3-W4.4 expose owner-scoped risk insights with deterministic
 classification, optional DeepSeek narrative enrichment, Redis result caching,
-strict fallback, and durable analysis provenance.
+strict fallback, durable analysis provenance, and paginated snapshot history.
 
 ## CI and runtime image
 
