@@ -13,6 +13,7 @@
 [Verification](docs/demo-video-verification.md) ·
 [Backend Release](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.1.0) ·
 [Frontend Repository](https://github.com/RujingXu-bit/portfolio-analytics-web) ·
+[CSV Import Guide](docs/csv-import.md) ·
 [Interview Guide](docs/interview-guide.md) ·
 [Resume Entry](docs/resume-project-entry.md)
 
@@ -220,6 +221,8 @@ another user's portfolio, resisting direct-ID enumeration.
 | `GET` | `/portfolios/{id}` | 200 | Read one owned portfolio. |
 | `POST` | `/portfolios/{id}/transactions` | 201 or 200 replay | Create an idempotent transaction. |
 | `GET` | `/portfolios/{id}/transactions` | 200 | Read the ordered transaction ledger. |
+| `POST` | `/portfolios/{id}/transactions/import/preview` | 200 | Validate a UTF-8 CSV without writing. |
+| `POST` | `/portfolios/{id}/transactions/import` | 200 | Commit valid CSV rows with per-row outcomes. |
 | `GET` | `/portfolios/{id}/analytics` | 200 | Calculate historical portfolio analytics. |
 | `POST` | `/portfolios/{id}/insights` | 200 | Persist and return a deterministic or enriched risk summary. |
 | `GET` | `/portfolios/{id}/insights` | 200 | Read persisted analysis snapshots with pagination. |
@@ -293,6 +296,12 @@ curl -H 'Authorization: Bearer <token>' \
 The ledger is ordered by occurrence time, ingestion time, and ID. PostgreSQL
 uses `NUMERIC` columns and Python business objects use `Decimal` for quantities,
 prices, cash, and fees.
+
+For batch input, follow the [CSV import guide](docs/csv-import.md). Preview is
+write-free and reports `ready`, `replay`, or `invalid` per row. Commit processes
+the same CSV through the existing ownership, Decimal, domain, ledger-lock, and
+idempotency boundaries and reports `created`, `replayed`, or `failed`; an
+expected row failure does not hide or roll back successful rows.
 
 ### Analytics
 
@@ -510,8 +519,10 @@ The `v1.1.0` backend adds owner-scoped portfolio/snapshot queries, Redis request
 limits, and reproducible Render/Neon/Upstash configuration. The independent
 [Next.js frontend](https://github.com/RujingXu-bit/portfolio-analytics-web) is
 available as a [public demo](https://portfolio-analytics-web-hazel.vercel.app).
-The project still has no refresh tokens, token revocation, second real market-
-data provider, automatic trading, or multi-currency conversion.
+The project now supports explicit yfinance/Twelve Data selection and
+preview-first CSV transaction import. It still has no automatic provider
+failover, refresh tokens, token revocation, automatic trading, or multi-currency
+conversion.
 
 ## Project structure
 
@@ -521,7 +532,7 @@ src/portfolio_analytics_api/
 ├── application/      # use cases, ownership, transaction boundaries
 ├── core/             # settings and structured logging
 ├── domain/           # deterministic values, valuation, metrics, risk rules
-├── infrastructure/   # PostgreSQL, Redis, yfinance, JWT, DeepSeek adapters
+├── infrastructure/   # PostgreSQL, Redis, market data, JWT, DeepSeek adapters
 └── main.py            # application assembly
 
 tests/

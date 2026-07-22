@@ -13,6 +13,9 @@ Keep a Changelog conventions, and package versions follow PEP 440.
 - Explicit `MARKET_DATA_PROVIDER` configuration. yfinance remains the
   credential-free default; Twelve Data requires an environment-only API key
   and never activates through silent failover.
+- Preview-first UTF-8 CSV transaction import with bounded document size,
+  structured row errors, stable source-provided `external_id` replay, explicit
+  partial commit results, and the existing ownership/Decimal/ledger boundary.
 
 ## [1.1.0] - 2026-07-22
 

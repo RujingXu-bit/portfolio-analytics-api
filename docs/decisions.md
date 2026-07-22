@@ -315,6 +315,39 @@ an exchange holiday. The methodology exposes this policy. Implicit BUY funding
 supports incomplete imported cash ledgers, while making that contribution
 explicit and neutral to performance instead of silently allowing negative cash.
 
+## 2026-07-22: Preview-first CSV import with row-isolated commits
+
+### Context
+
+E2.2 must make broker-style batch entry practical without creating a second,
+weaker transaction path. CSV syntax and field errors should be visible before
+writes, while one bad row must not obscure valid rows or bypass ownership,
+Decimal precision, ledger rules, or idempotency.
+
+### Decision
+
+- Accept bounded UTF-8 CSV directly as `text/csv`: at most 1,000,000 bytes and
+  500 non-blank rows. Require `external_id`, `transaction_type`, and
+  timezone-aware `occurred_at`; allow only the documented transaction fields.
+- Provide separate preview and commit endpoints. Preview verifies ownership
+  before parsing, writes nothing, and simulates rows top to bottom against the
+  current ledger with `ready`, `replay`, or `invalid` outcomes.
+- Require a source-provided stable `external_id`; do not hash row content into
+  an ID because economically identical broker rows can be distinct events.
+- Commit reparses the document and calls the existing `TransactionService` for
+  each valid row. Return `created`, `replayed`, or `failed` plus structured
+  errors per row. Expected row failures do not roll back prior successful rows.
+- Keep document format errors as stable HTTP 422 responses. Do not log request
+  bodies, row values, or broker identifiers.
+
+### Trade-offs
+
+Per-row transactions make partial outcomes explicit and reuse the proven lock
+and idempotency path, but they are not an all-or-nothing bulk transaction.
+Preview is advisory rather than a reservation, so concurrent writes can change
+commit results. Top-to-bottom processing is predictable, but a SELL that
+appears before its supporting BUY can fail even if a later row would fund it.
+
 ## 2026-07-22: Add Twelve Data as the explicit second market-data provider
 
 ### Context

@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from portfolio_analytics_api.api.auth_routes import build_auth_router
+from portfolio_analytics_api.api.csv_import import parse_transaction_csv
 from portfolio_analytics_api.api.observability import RequestObservabilityMiddleware
 from portfolio_analytics_api.api.rate_limit import RateLimitPolicies
 from portfolio_analytics_api.api.routes import build_portfolio_router
@@ -32,6 +33,8 @@ from portfolio_analytics_api.application import (
     RateLimiter,
     RateLimitExceededError,
     TransactionIdempotencyConflictError,
+    TransactionImportFormatError,
+    TransactionImportService,
     TransactionService,
     UnitOfWorkFactory,
 )
@@ -72,6 +75,11 @@ def create_app(
     )
     portfolio_service = PortfolioService(unit_of_work_factory)
     transaction_service = TransactionService(unit_of_work_factory)
+    transaction_import_service = TransactionImportService(
+        unit_of_work_factory=unit_of_work_factory,
+        transaction_service=transaction_service,
+        parser=parse_transaction_csv,
+    )
     analytics_service = PortfolioAnalyticsService(
         unit_of_work_factory=unit_of_work_factory,
         market_data_provider=market_data_provider,
@@ -87,6 +95,7 @@ def create_app(
             authentication_service,
             portfolio_service,
             transaction_service,
+            transaction_import_service,
             analytics_service,
             insight_service,
             rate_limiter,
@@ -219,6 +228,16 @@ def create_app(
         return _error_response(
             status.HTTP_409_CONFLICT,
             "transaction_idempotency_conflict",
+            str(error),
+        )
+
+    @app.exception_handler(TransactionImportFormatError)
+    async def transaction_import_format_handler(
+        _request: Request, error: TransactionImportFormatError
+    ) -> JSONResponse:
+        return _error_response(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "csv_import_invalid",
             str(error),
         )
 

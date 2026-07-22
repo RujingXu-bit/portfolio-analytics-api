@@ -13,6 +13,7 @@ from pydantic import (
     model_validator,
 )
 
+from portfolio_analytics_api.application import TransactionImportRowStatus
 from portfolio_analytics_api.domain import (
     PriceBasis,
     ReturnType,
@@ -145,6 +146,65 @@ class TransactionResponse(BaseModel):
     unit_price: Decimal | None
     cash_amount: Decimal | None
     fees: Decimal
+
+
+class TransactionImportIssueResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    code: str
+    message: str
+    field: str | None
+
+
+class TransactionImportValueResponse(BaseModel):
+    external_id: str
+    transaction_type: TransactionType
+    occurred_at: datetime
+    symbol: str | None
+    quantity: Decimal | None
+    unit_price: Decimal | None
+    cash_amount: Decimal | None
+    fees: Decimal
+
+
+class TransactionImportPreviewRowResponse(BaseModel):
+    row_number: int
+    external_id: str | None
+    status: TransactionImportRowStatus
+    normalized: TransactionImportValueResponse | None
+    errors: list[TransactionImportIssueResponse]
+
+
+class TransactionImportPreviewSummaryResponse(BaseModel):
+    total_rows: int
+    ready_rows: int
+    replay_rows: int
+    invalid_rows: int
+
+
+class TransactionImportPreviewResponse(BaseModel):
+    rows: list[TransactionImportPreviewRowResponse]
+    summary: TransactionImportPreviewSummaryResponse
+
+
+class TransactionImportCommitRowResponse(BaseModel):
+    row_number: int
+    external_id: str | None
+    status: TransactionImportRowStatus
+    transaction: TransactionResponse | None
+    errors: list[TransactionImportIssueResponse]
+
+
+class TransactionImportCommitSummaryResponse(BaseModel):
+    total_rows: int
+    created_rows: int
+    replayed_rows: int
+    failed_rows: int
+
+
+class TransactionImportCommitResponse(BaseModel):
+    rows: list[TransactionImportCommitRowResponse]
+    summary: TransactionImportCommitSummaryResponse
 
 
 class PortfolioResponse(BaseModel):

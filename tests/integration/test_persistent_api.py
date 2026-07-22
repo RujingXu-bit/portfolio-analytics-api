@@ -92,6 +92,17 @@ def buy_payload(
     }
 
 
+def csv_import_payload() -> bytes:
+    return (
+        b"external_id,transaction_type,occurred_at,symbol,quantity,unit_price,"
+        b"cash_amount,fees\n"
+        b"db-deposit,DEPOSIT,2026-01-01T09:00:00Z,,,,1000,0\n"
+        b"db-buy,BUY,2026-01-02T09:00:00Z,DEMO,2,100,,0.25\n"
+        b"db-sell,SELL,2026-01-03T09:00:00Z,DEMO,1,110,,0.10\n"
+        b"db-invalid,SELL,2026-01-04T09:00:00Z,DEMO,5,110,,0\n"
+    )
+
+
 async def authenticate(
     client: httpx.AsyncClient,
     email: str = "owner@example.com",
@@ -214,6 +225,67 @@ async def test_all_endpoints_persist_across_app_and_engine_recreation(
 
 
 @pytest.mark.anyio
+async def test_csv_import_persists_valid_rows_and_replays_database_ids(
+    database_engine: AsyncEngine,
+) -> None:
+    app = build_test_app(database_engine)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await authenticate(client)
+        portfolio = await client.post("/portfolios", json={"name": "CSV import"})
+        portfolio_id = portfolio.json()["id"]
+        path = f"/portfolios/{portfolio_id}/transactions/import"
+
+        preview = await client.post(
+            f"{path}/preview",
+            content=csv_import_payload(),
+            headers={"Content-Type": "text/csv"},
+        )
+        first = await client.post(
+            path,
+            content=csv_import_payload(),
+            headers={"Content-Type": "text/csv"},
+        )
+        retry = await client.post(
+            path,
+            content=csv_import_payload(),
+            headers={"Content-Type": "text/csv"},
+        )
+        ledger = await client.get(f"/portfolios/{portfolio_id}/transactions")
+
+    assert preview.json()["summary"] == {
+        "total_rows": 4,
+        "ready_rows": 3,
+        "replay_rows": 0,
+        "invalid_rows": 1,
+    }
+    assert first.json()["summary"] == {
+        "total_rows": 4,
+        "created_rows": 3,
+        "replayed_rows": 0,
+        "failed_rows": 1,
+    }
+    assert retry.json()["summary"] == {
+        "total_rows": 4,
+        "created_rows": 0,
+        "replayed_rows": 3,
+        "failed_rows": 1,
+    }
+    first_ids = [
+        row["transaction"]["id"]
+        for row in first.json()["rows"]
+        if row["transaction"] is not None
+    ]
+    retry_ids = [
+        row["transaction"]["id"]
+        for row in retry.json()["rows"]
+        if row["transaction"] is not None
+    ]
+    assert retry_ids == first_ids
+    assert len(ledger.json()) == 3
+
+
+@pytest.mark.anyio
 async def test_persistent_api_values_multiple_assets(
     database_engine: AsyncEngine,
 ) -> None:
@@ -310,6 +382,16 @@ async def test_persistent_api_denies_cross_user_direct_id_access(
             await client.post(
                 f"/portfolios/{portfolio_id}/transactions",
                 json=buy_payload(external_id="other-buy"),
+            ),
+            await client.post(
+                f"/portfolios/{portfolio_id}/transactions/import/preview",
+                content=csv_import_payload(),
+                headers={"Content-Type": "text/csv"},
+            ),
+            await client.post(
+                f"/portfolios/{portfolio_id}/transactions/import",
+                content=csv_import_payload(),
+                headers={"Content-Type": "text/csv"},
             ),
             await client.get(
                 f"/portfolios/{portfolio_id}/analytics",

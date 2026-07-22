@@ -105,6 +105,17 @@ def buy_transaction(
     }
 
 
+def transaction_csv() -> bytes:
+    return (
+        b"external_id,transaction_type,occurred_at,symbol,quantity,unit_price,"
+        b"cash_amount,fees\n"
+        b"csv-deposit,DEPOSIT,2026-01-01T09:00:00Z,,,,1000,0\n"
+        b"csv-buy,BUY,2026-01-02T09:00:00Z,AAPL,2,100,,0.25\n"
+        b"csv-sell,SELL,2026-01-03T09:00:00Z,AAPL,3,110,,0\n"
+        b"csv-bad,BUY,not-a-date,AAPL,1,100,,0\n"
+    )
+
+
 async def create_portfolio(client: httpx.AsyncClient) -> str:
     response = await client.post(
         "/portfolios",
@@ -195,9 +206,87 @@ async def test_openapi_exposes_paginated_portfolio_and_snapshot_queries() -> Non
     paths = response.json()["paths"]
     assert "get" in paths["/portfolios"]
     assert "get" in paths["/portfolios/{portfolio_id}/insights"]
+    assert "post" in paths["/portfolios/{portfolio_id}/transactions/import/preview"]
+    assert "post" in paths["/portfolios/{portfolio_id}/transactions/import"]
     schemas = response.json()["components"]["schemas"]
     assert "PortfolioPageResponse" in schemas
     assert "AnalysisSnapshotPageResponse" in schemas
+    assert "TransactionImportPreviewResponse" in schemas
+    assert "TransactionImportCommitResponse" in schemas
+
+
+@pytest.mark.anyio
+async def test_csv_preview_commit_partial_failure_and_idempotent_retry() -> None:
+    async with api_client({}) as client:
+        portfolio_id = await create_portfolio(client)
+        path = f"/portfolios/{portfolio_id}/transactions/import"
+
+        preview = await client.post(
+            f"{path}/preview",
+            content=transaction_csv(),
+            headers={"Content-Type": "text/csv"},
+        )
+        before_commit = await client.get(f"/portfolios/{portfolio_id}/transactions")
+        commit = await client.post(
+            path,
+            content=transaction_csv(),
+            headers={"Content-Type": "text/csv"},
+        )
+        retry = await client.post(
+            path,
+            content=transaction_csv(),
+            headers={"Content-Type": "text/csv"},
+        )
+        ledger = await client.get(f"/portfolios/{portfolio_id}/transactions")
+
+    assert preview.status_code == 200
+    assert preview.json()["summary"] == {
+        "total_rows": 4,
+        "ready_rows": 2,
+        "replay_rows": 0,
+        "invalid_rows": 2,
+    }
+    assert [row["status"] for row in preview.json()["rows"]] == [
+        "ready",
+        "ready",
+        "invalid",
+        "invalid",
+    ]
+    assert preview.json()["rows"][2]["errors"][0]["code"] == "invalid_ledger"
+    assert preview.json()["rows"][3]["errors"][0]["field"] == "occurred_at"
+    assert before_commit.json() == []
+
+    assert commit.status_code == 200
+    assert commit.json()["summary"] == {
+        "total_rows": 4,
+        "created_rows": 2,
+        "replayed_rows": 0,
+        "failed_rows": 2,
+    }
+    assert retry.json()["summary"] == {
+        "total_rows": 4,
+        "created_rows": 0,
+        "replayed_rows": 2,
+        "failed_rows": 2,
+    }
+    assert [transaction["external_id"] for transaction in ledger.json()] == [
+        "csv-deposit",
+        "csv-buy",
+    ]
+
+
+@pytest.mark.anyio
+async def test_csv_import_format_error_has_stable_422() -> None:
+    async with api_client({}) as client:
+        portfolio_id = await create_portfolio(client)
+        response = await client.post(
+            f"/portfolios/{portfolio_id}/transactions/import/preview",
+            content=b"external_id,occurred_at\na,2026-01-01T00:00:00Z\n",
+            headers={"Content-Type": "text/csv"},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "csv_import_invalid"
 
 
 @pytest.mark.anyio
@@ -371,6 +460,16 @@ async def test_missing_portfolio_has_stable_not_found_errors() -> None:
             await client.post(
                 f"/portfolios/{portfolio_id}/transactions", json=buy_transaction()
             ),
+            await client.post(
+                f"/portfolios/{portfolio_id}/transactions/import/preview",
+                content=transaction_csv(),
+                headers={"Content-Type": "text/csv"},
+            ),
+            await client.post(
+                f"/portfolios/{portfolio_id}/transactions/import",
+                content=transaction_csv(),
+                headers={"Content-Type": "text/csv"},
+            ),
             await client.get(
                 f"/portfolios/{portfolio_id}/analytics",
                 params={"start_date": "2026-01-01", "end_date": "2026-01-31"},
@@ -435,6 +534,16 @@ async def test_direct_id_guess_cannot_access_another_users_resources() -> None:
                 f"/portfolios/{portfolio_id}/transactions",
                 json=buy_transaction(),
                 headers=other_headers,
+            ),
+            await client.post(
+                f"/portfolios/{portfolio_id}/transactions/import/preview",
+                content=transaction_csv(),
+                headers={**other_headers, "Content-Type": "text/csv"},
+            ),
+            await client.post(
+                f"/portfolios/{portfolio_id}/transactions/import",
+                content=transaction_csv(),
+                headers={**other_headers, "Content-Type": "text/csv"},
             ),
             await client.get(
                 f"/portfolios/{portfolio_id}/analytics",

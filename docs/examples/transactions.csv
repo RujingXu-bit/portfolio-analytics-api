@@ -1,0 +1,3 @@
+external_id,transaction_type,occurred_at,symbol,quantity,unit_price,cash_amount,fees
+example-deposit-001,DEPOSIT,2026-01-01T09:00:00Z,,,,10000,0
+example-buy-001,BUY,2026-01-02T09:00:00Z,AAPL,10,185.25,,1.50
