@@ -93,8 +93,13 @@ portfolio valuation belong to later tasks in `PROJECT_PLAN.md`.
 make lint
 make typecheck
 make test
+make test-cov
 make check
 ```
+
+`make test-cov` runs the complete test suite with branch coverage and an
+uncovered-line report. It is also the explicit coverage command used by the
+Week 1 milestone review.
 
 To apply automatic formatting:
 
