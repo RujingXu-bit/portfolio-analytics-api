@@ -17,7 +17,7 @@
 
 ### 当前状态
 
-- 项目阶段：Week 1 已完成，准备进入 Week 2。
+- 项目阶段：Week 1 里程碑审查已通过，准备进入 Week 2。
 - 当前优先任务：`W2.1`。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
@@ -153,11 +153,31 @@ MarketDataProvider ---- Redis Cache
 - 单元测试完全离线且结果稳定。
 - 路由不直接执行金融算法。
 
+#### [x] W1.R Week 1里程碑审查（2–3h）
+
+依赖：W1.1、W1.2、W1.3、W1.4。
+
+工作内容：
+
+- 根据本计划逐项验证 W1.1–W1.4 的验收标准与完成状态。
+- 运行 `make check` 和 `make test-cov`，记录命令、结果及失败原因。
+- 审查金融计算正确性、边界测试、领域层依赖边界和单元测试网络隔离。
+- 按 P0、P1、P2、P3 输出带文件和行号的问题，并给出 PASS、CONDITIONAL PASS 或 FAIL 结论。
+
+验收标准：
+
+- W1.1–W1.4 的全部验收标准均由当前仓库事实和可复现验证支持。
+- `make check` 和 `make test-cov` 均成功运行。
+- 不存在未解决的 P0 或 P1 问题，P2 和 P3 问题均已记录处置结论。
+- 最终审查结论为 PASS；CONDITIONAL PASS 或 FAIL 均不视为通过，不得勾选本任务。
+
+里程碑门禁：`W1.R` 勾选完成前，不得启动任何 W2 任务。完成审查但结论未通过时保持 `[ ]`，在进度日志记录阻塞项并完成整改后重新审查。
+
 ### Week 2：PostgreSQL与交易业务（20–25小时）
 
 #### [ ] W2.1 建立本地基础设施（3–4h）
 
-依赖：W1.1。
+依赖：W1.R。
 
 工作内容：
 
@@ -505,6 +525,17 @@ GET  /health
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] W1.R 完成 P2 整改后的独立复审，最终结论为 PASS；未启动任何 Week 2 实现。
+- P2 处置：Makefile 新增并成功运行 `make test-cov`；市场数据契约明确 `PriceBar.date` 是标的上市交易所时区下的交易会话日期，供应商时间戳须先转换至该时区再取日期，不允许直接截断 UTC 或使用主机时区。
+- 验证：`make check` 通过，Ruff 与格式检查无问题，mypy 检查 26 个源文件无问题，pytest 36 项通过且 branch coverage 为 100%；独立运行 `make test-cov` 再次通过 36 项测试且 branch coverage 为 100%；`uv lock --check` 通过。
+- 复审：W1.1–W1.4 验收证据继续有效，首次审查的两项 P2 均已关闭；领域依赖扫描和测试网络隔离复核通过，`git diff --check` 通过，不存在未解决的 P0、P1、P2 或 P3 问题。W1.R 门禁解除，下一步：执行 `W2.1 建立本地基础设施`。
+
+- [ ] W1.R 完成首次 Week 1 里程碑审查，结论为 CONDITIONAL PASS；W1.1–W1.4 的原验收标准均有当前实现和测试证据支持，但该结论不视为里程碑通过。
+- 验证：全新临时环境执行 `make install` 成功；`make check` 通过，Ruff、format check、mypy 和 36 项单元测试通过，branch coverage 为 100%；`make test-cov` 失败，因为 Makefile 不存在该目标。
+- 审查：金融公式与文档口径一致，计划要求的主要边界均有直接测试；领域层未依赖 FastAPI、SQLAlchemy、Pandas、具体 Provider、网络、数据库或系统当前时间；单元测试仅使用 Fake Provider、内存 Repository 和 `httpx.ASGITransport`，未访问真实网络。
+- 未解决项：补充并通过 `make test-cov` 统一命令；明确市场时间戳归一化为 `PriceBar.date` 的时区规则。在 W1.R 复审得到 PASS 并勾选前，不得启动 W2。
+- 下一步：处理 W1.R 未解决项后重新运行里程碑审查。
 
 - [x] W1.4 完成 `MarketDataProvider` 与 `PortfolioRepository` 协议、`FakeMarketDataProvider`、内存 Repository、Portfolio 创建应用服务和 analytics 应用服务；临时 API 提供 `POST /portfolios` 与 `GET /portfolios/{portfolio_id}/analytics`。
 - 固定单标的交易和 adjusted-close 价格可通过 API 返回区间简单收益率、年化波动率、最大回撤、Sharpe Ratio、`as_of` 与完整 methodology；路由只负责 HTTP schema 和应用服务调用，单标的临时限制已记录于 README、methodology 与架构文档。

@@ -1,4 +1,4 @@
-.PHONY: install dev test lint format typecheck check
+.PHONY: install dev test test-cov lint format typecheck check
 
 install:
 	uv sync --locked
@@ -7,6 +7,9 @@ dev:
 	uv run uvicorn portfolio_analytics_api.main:app --reload
 
 test:
+	uv run pytest --cov=portfolio_analytics_api --cov-report=term-missing
+
+test-cov:
 	uv run pytest --cov=portfolio_analytics_api --cov-report=term-missing
 
 lint:

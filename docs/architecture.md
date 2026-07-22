@@ -32,6 +32,13 @@ repository implements the application repository protocol. PostgreSQL and a
 real market data provider are deferred to their explicit Week 2 and Week 3
 tasks.
 
+The market data provider boundary also owns timestamp normalization. It maps
+each observation to the trading-session date in the instrument's listing
+exchange timezone before constructing `PriceBar`; application and domain code
+never infer a date from a vendor timestamp or the host timezone. The complete
+normalization rule is recorded in `docs/methodology.md` and will apply to the
+real provider introduced in W3.1.
+
 ## Temporary scope
 
 The W1.4 API supports `POST /portfolios` and

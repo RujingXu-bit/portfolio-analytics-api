@@ -13,6 +13,16 @@ Market data providers must convert their responses into the domain `PriceBar`
 type. Provider response objects and Pandas DataFrames must not enter the domain
 or application layers.
 
+`PriceBar.date` is the trading-session date in the instrument's listing
+exchange timezone, not the calendar date obtained by truncating a UTC
+timestamp. A provider must preserve an explicit session date when its source
+supplies one. When the source supplies a timestamp instead, the provider must
+first convert that timestamp to the listing exchange timezone and only then
+extract the date. The adapter must reject a timestamp whose exchange timezone
+cannot be determined rather than silently applying the host timezone or UTC.
+Provider-specific timestamp and timezone handling belongs at this adapter
+boundary; domain analytics operate only on the normalized date.
+
 Prices remain `Decimal` values in domain objects. Statistical calculations may
 explicitly convert copies of those values to floating-point numbers, but must
 not overwrite the original prices.
