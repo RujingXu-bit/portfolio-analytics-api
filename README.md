@@ -16,6 +16,9 @@ Current candidate: `1.0.0rc1` / Git tag `v1.0.0-rc.1`. See the
 [interview guide](docs/interview-guide.md). A release candidate is not a
 general-availability or production-capacity claim.
 
+完全不懂代码的使用者请从
+[中文零基础项目说明](docs/项目说明-零基础.md)开始。
+
 ## Architecture
 
 ```text
