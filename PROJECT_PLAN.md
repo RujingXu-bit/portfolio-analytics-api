@@ -17,7 +17,7 @@
 
 ### 当前状态
 
-- 项目阶段：Week 4 已完成，W4.1–W4.4 已通过验收。
+- 项目阶段：Week 4 已完成，W4.1–W4.4 与 W4.R 已通过验收。
 - 当前优先任务：`W5.1`。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
@@ -418,11 +418,31 @@ MarketDataProvider ---- Redis Cache
 - 输出明确包含信息用途和非投资建议声明。
 - 单元测试使用 Fake Insight Generator，不调用真实服务。
 
+#### [x] W4.R Week 4里程碑审查（2–3h）
+
+依赖：W4.1、W4.2、W4.3、W4.4。
+
+工作内容：
+
+- 根据本计划逐项验证 W4.1–W4.4 的验收标准与完成状态。
+- 运行 `make check` 和 `make test-cov`，记录命令、结果及失败原因。
+- 审查金融计算正确性与边界测试、领域层依赖边界、测试网络隔离、认证与所有权边界，以及 LLM 失败回退和快照记录。
+- 按 P0、P1、P2、P3 输出带文件和行号的问题，并给出 PASS、CONDITIONAL PASS 或 FAIL 结论。
+
+验收标准：
+
+- W4.1–W4.4 的全部验收标准均由当前仓库事实和可复现验证支持。
+- `make check` 和 `make test-cov` 均成功运行，W4 PostgreSQL/Redis 集成测试通过。
+- 不存在未解决的 P0 或 P1 问题，P2 和 P3 问题均已记录处置结论。
+- 最终审查结论为 PASS；CONDITIONAL PASS 或 FAIL 均不视为通过，不得勾选本任务。
+
+里程碑门禁：`W4.R` 勾选完成前，不得启动任何 W5 任务。完成审查但结论未通过时保持 `[ ]`，在进度日志记录阻塞项并完成整改后重新审查。
+
 ### Week 5：质量、性能与求职交付（20–25小时）
 
 #### [ ] W5.1 可观测性和安全检查（4–5h）
 
-依赖：W4.4。
+依赖：W4.R。
 
 工作内容：
 
@@ -453,7 +473,7 @@ MarketDataProvider ---- Redis Cache
 
 #### [ ] W5.3 完善CI与干净环境验证（4–5h）
 
-依赖：W2.4、W4.2。
+依赖：W2.4、W4.2、W4.R。
 
 工作内容：
 
@@ -565,6 +585,19 @@ GET  /health
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] W4.R Week 4 里程碑审查通过。Review baseline：
+  `main@e0032f441588f928b004ed308b7fea599339d27d`；`HEAD == origin/main: yes`；
+  `Worktree clean: yes`。逐项复核 W4.1–W4.4 后未发现 P0、P1、P2 或 P3
+  问题，结论为 PASS。
+- 验证：`make check` 与 `make test-cov` 均通过 Ruff、format、mypy 和 134 项
+  离线单元测试，branch coverage 为 88%；隔离 PostgreSQL/Redis 启动后，
+  `make test-all` 的 146 项单元与集成测试全部通过，综合 branch coverage 为
+  93%。首次 `make test-all` 因测试服务未启动失败，服务就绪后的重跑通过；
+  该环境前置失败不计为实现缺陷。领域层未导入 FastAPI、SQLAlchemy、Pandas、
+  yfinance 或具体 Provider；真实 yfinance 与 DeepSeek contract 测试均保持显式
+  opt-in，默认测试未发现真实外网访问。W4.R 已通过，W5 门禁解除；下一步：
+  执行 `W5.1`。
 
 - [x] W4.4 完成单一 DeepSeek LLM Provider：应用层新增 `InsightGenerator`
   协议，Provider 只接收后端已计算的结构化指标、资产权重、`as_of`、stale
