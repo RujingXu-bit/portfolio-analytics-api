@@ -3,6 +3,7 @@ from datetime import date
 
 import pytest
 
+from portfolio_analytics_api.application import MarketDataInvalidResponseError
 from portfolio_analytics_api.infrastructure import TwelveDataMarketDataProvider
 from tests.contract.market_data_contract import assert_price_bar_contract
 
@@ -38,3 +39,21 @@ async def test_twelve_data_provider_contract() -> None:
         end_date=end_date,
     )
     assert result.stale is False
+
+
+@pytest.mark.anyio
+async def test_twelve_data_provider_rejects_truncated_long_window() -> None:
+    provider = TwelveDataMarketDataProvider(
+        api_key=_api_key,
+        request_timeout_seconds=30,
+    )
+
+    with pytest.raises(
+        MarketDataInvalidResponseError,
+        match="truncated at the 5000-point limit",
+    ):
+        await provider.get_price_bars(
+            "AAPL",
+            date(2000, 1, 1),
+            date(2026, 1, 1),
+        )

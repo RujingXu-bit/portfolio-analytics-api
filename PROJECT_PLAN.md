@@ -17,9 +17,11 @@
 
 ### 当前状态
 
-- 项目阶段：后端 `v1.1.0` 与公开演示已发布，Post-V1 P2 增强已实现。
-- 当前优先任务：无；E2.1 第二 Provider 与 E2.2 CSV 导入均已完成。
-- 当前阻塞：无。
+- 项目阶段：后端 `v1.1.0` 与公开演示已发布，Post-V1 P2 增强已实现；
+  `R2.1` 的 Twelve Data 截断整改与本地门禁已完成，待合并后最终复审。
+- 当前优先任务：将 `R2.1` 整改合并到 `origin/main`，再从同步、干净基线复审。
+- 当前阻塞：最终复审基线尚未包含本次整改；复审 PASS 前不得发布包含 E2.x 的
+  正式后端版本。
 - V1目标版本：`v1.0.0`。
 - Post-V1 后端当前正式版：`v1.1.0`；E2.x 变更记录于 Unreleased；独立 Web
   前端当前正式版：`v1.0.0`。
@@ -718,6 +720,20 @@ Portfolio lock、Decimal 精度、领域/持仓验证和数据库唯一约束；
 幂等冲突均可解释，完全重试返回原数据库 transaction ID。单元、PostgreSQL 集成、
 OpenAPI、迁移漂移、锁文件及生产镜像门禁全部通过。
 
+#### [ ] R2.1 Post-V1/P2 最终审查（2–3h）
+
+依赖：E2.1、E2.2。
+
+工作内容：从最新、干净的 `origin/main` 逐项复核 E2.1/E2.2 的实现、测试、
+文档、安全和公网行为；运行静态、单元、集成、迁移、锁文件、构建、真实
+Provider contract 与生产镜像门禁；按 P0/P1/P2/P3 输出问题和 PASS、
+CONDITIONAL PASS 或 FAIL 结论。
+
+验收：审查基线满足 `HEAD == origin/main` 且工作区干净；E2.1 不会对请求日期
+范围静默返回不完整价格序列，E2.2 的所有权、预览只读、Decimal、逐行提交和
+幂等边界由离线、PostgreSQL 与公网证据共同支持；全部门禁通过且不存在未解决的
+P0/P1 问题。只有最终结论为 PASS 才能勾选本任务并开始正式版本化 E2.x。
+
 ### Post-V1 范围边界
 
 - 不引入微服务、Kafka、Kubernetes、实时行情、价格预测、自动交易或买卖建议。
@@ -742,6 +758,43 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] R2.1 的唯一 P1 已完成整改。Twelve Data 请求现在显式设置
+  `outputsize=5000`；响应达到 5,000 条时以稳定
+  `MarketDataInvalidResponseError` fail closed，不再把可能截断的价格序列交给
+  analytics。新增覆盖 26 年请求窗口与 5,000 条截断响应的离线回归测试，以及
+  真实长窗口 contract；方法论和架构文档同步说明供应商上限及缩短日期范围要求。
+- 整改验证：`make check` 通过 Ruff、format、严格 mypy（95 个源文件）与 223 项
+  单元测试，branch coverage 90%；`make test-all` 通过 239 项单元/集成测试，
+  branch coverage 94%；`make db-check` 无迁移漂移，`uv lock --check`、`uv build`、
+  `git diff --check` 和 `make image-smoke` 通过。使用 Twelve Data 官方 demo key
+  执行 `make test-contract`，Twelve Data 短/长窗口与 yfinance 共 3 项通过，
+  DeepSeek 因未显式启用按设计跳过。R2.1 主任务保持未勾选；下一步是在整改合并后
+  从同步、干净的 `origin/main` 重新记录审查基线并给出最终结论。
+
+- [ ] R2.1 最终审查结论为 **FAIL**。Review baseline:
+  `main@1ea3959e5b552d93b0c755caea0a9c031d9060a1`；
+  `HEAD == origin/main: yes`；`Worktree clean: yes`。发现 1 个未解决 P1：
+  `TwelveDataMarketDataProvider` 未检测 `/time_series` 的 5,000 数据点上限。
+  使用官方 demo key 请求 AAPL `2000-01-01` 至 `2026-01-01` 时，实际返回恰好
+  5,000 条且最早日期为 `2006-02-16`，适配器仍作为成功结果返回；这会让长周期
+  analytics 在未披露的截断序列上计算收益、波动率、回撤和 Sharpe Ratio。
+  Twelve Data 官方历史数据说明确认单次请求最多 5,000 条：
+  <https://support.twelvedata.com/en/articles/5214728-getting-historical-data>。
+- 其余审查证据通过：`make check` 通过 Ruff、format、严格 mypy（95 个源文件）
+  与 222 项单元测试，branch coverage 90%；`make test-all` 通过 238 项单元/集成
+  测试，branch coverage 94%；`make db-check` 无迁移漂移，`uv lock --check`、
+  `uv build`、`git diff --check` 和 `make image-smoke` 通过。真实 contract 使用
+  官方 demo key 验证 Twelve Data 与 yfinance 共 2 项通过，DeepSeek 因未显式
+  启用而按设计跳过；基线 GitHub Actions run `29948743386` 成功。
+- 公网 Render 验收通过 `/health` request ID、OpenAPI 两个 CSV 路径、隔离合成
+  用户注册、Portfolio 创建、2 行 preview、commit 与完整 retry；重试返回相同
+  PostgreSQL transaction ID。CSV 所有权在解析前校验、预览不写入、逐行提交复用
+  原交易锁/Decimal/领域/幂等边界，未发现 P0、P1、P2 或 P3 问题。
+- 整改要求：Twelve Data 对超过单次上限的日期范围执行可验证的分段获取并合并，
+  或在任何可能截断时返回稳定、明确的错误；新增超过 5,000 个交易日的离线回归
+  测试和真实长窗口 contract 证据。整改合并到最新 `origin/main` 后必须重新执行
+  R2.1 全部门禁；复审 PASS 前不得创建包含 E2.x 的正式 tag 或 GitHub Release。
 
 - [x] E2.2 已完成 preview-first CSV 交易导入：新增 owner-scoped
   `POST /portfolios/{id}/transactions/import/preview` 与

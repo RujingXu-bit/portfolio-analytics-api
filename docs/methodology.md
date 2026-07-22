@@ -31,13 +31,16 @@ dates are rejected instead of silently repaired or deduplicated. Non-trading
 days simply have no observation.
 
 The optional Twelve Data adapter requests `time_series` with `interval=1day`,
-the inclusive requested date bounds, and `adjust=all`. Under that provider's
-contract, `all` applies both split and dividend adjustments, so the normalized
-`close` remains the same total-return price basis used by yfinance `Adj Close`.
-Daily datetimes are explicit exchange-local session dates; the adapter requires
-the response's `exchange_timezone` metadata and never derives a date from the
-host timezone. Missing, duplicate, non-positive, non-finite, or malformed rows
-are rejected under the same domain-facing error boundary.
+the inclusive requested date bounds, `adjust=all`, and the provider maximum
+`outputsize=5000`. Under that provider's contract, `all` applies both split and
+dividend adjustments, so the normalized `close` remains the same total-return
+price basis used by yfinance `Adj Close`. A response containing 5,000 points is
+rejected as potentially truncated instead of being used for analytics; callers
+must select a shorter date range. Daily datetimes are explicit exchange-local
+session dates; the adapter requires the response's `exchange_timezone` metadata
+and never derives a date from the host timezone. Missing, duplicate,
+non-positive, non-finite, or malformed rows are rejected under the same
+domain-facing error boundary.
 
 Prices remain `Decimal` values in domain objects. Statistical calculations may
 explicitly convert copies of those values to floating-point numbers, but must
