@@ -1,7 +1,7 @@
 # AI-Powered Portfolio Analytics API
 
 [![CI](https://github.com/RujingXu-bit/portfolio-analytics-api/actions/workflows/ci.yml/badge.svg)](https://github.com/RujingXu-bit/portfolio-analytics-api/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/RujingXu-bit/portfolio-analytics-api)](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.1.0)
+[![Release](https://img.shields.io/github/v/release/RujingXu-bit/portfolio-analytics-api)](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.2.0)
 [![Live Demo](https://img.shields.io/badge/Live_Demo-Vercel-000000?logo=vercel)](https://portfolio-analytics-web-hazel.vercel.app)
 [![Frontend](https://img.shields.io/badge/Frontend-Next.js-111827?logo=nextdotjs)](https://github.com/RujingXu-bit/portfolio-analytics-web)
 
@@ -11,7 +11,7 @@
 [Video Script](docs/demo-video-script.md) ·
 [English Captions](docs/demo-video-captions.srt) ·
 [Verification](docs/demo-video-verification.md) ·
-[Backend Release](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.1.0) ·
+[Backend Release](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.2.0) ·
 [Frontend Repository](https://github.com/RujingXu-bit/portfolio-analytics-web) ·
 [CSV Import Guide](docs/csv-import.md) ·
 [Interview Guide](docs/interview-guide.md) ·
@@ -36,7 +36,7 @@ This V1 does not predict prices, automate trades, or guarantee returns. The LLM
 never calculates or overrides financial metrics or the deterministic risk
 classification. Unit tests and normal CI are fully offline.
 
-Current release: `1.1.0` / Git tag `v1.1.0`. See the
+Current release: `1.2.0` / Git tag `v1.2.0`. See the
 [release changelog](CHANGELOG.md), [API-only demo](docs/demo.md),
 [video script](docs/demo-video-script.md), and
 [interview guide](docs/interview-guide.md). The public-demo deployment runbook
@@ -515,14 +515,14 @@ failure stops the job; external provider contracts are excluded.
 - The API provides historical analytics and informational risk explanations,
   not investment advice.
 
-The `v1.1.0` backend adds owner-scoped portfolio/snapshot queries, Redis request
-limits, and reproducible Render/Neon/Upstash configuration. The independent
+The `v1.1.0` backend added owner-scoped portfolio/snapshot queries, Redis request
+limits, and reproducible Render/Neon/Upstash configuration. `v1.2.0` adds
+explicit yfinance/Twelve Data selection and preview-first CSV transaction
+import. The independent
 [Next.js frontend](https://github.com/RujingXu-bit/portfolio-analytics-web) is
 available as a [public demo](https://portfolio-analytics-web-hazel.vercel.app).
-The project now supports explicit yfinance/Twelve Data selection and
-preview-first CSV transaction import. It still has no automatic provider
-failover, refresh tokens, token revocation, automatic trading, or multi-currency
-conversion.
+The project still has no automatic provider failover, refresh tokens, token
+revocation, automatic trading, or multi-currency conversion.
 
 ## Project structure
 

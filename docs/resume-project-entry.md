@@ -30,6 +30,6 @@ financial metrics, rule-based AI fallback, CI, and public end-to-end tests.
 
 ## Interview links
 
-- Backend release: <https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.1.0>
+- Backend release: <https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.2.0>
 - Offline fixture: <https://portfolio-analytics-web-hazel.vercel.app/demo>
 - Architecture guide: <https://github.com/RujingXu-bit/portfolio-analytics-api/blob/main/docs/interview-guide.md>

@@ -75,7 +75,7 @@ def test_readme_exposes_portfolio_entry_points() -> None:
         "docs/demo-video-script.md",
         "docs/demo-video-captions.srt",
         "https://github.com/RujingXu-bit/portfolio-analytics-web",
-        "releases/tag/v1.1.0",
+        "releases/tag/v1.2.0",
         "docs/interview-guide.md",
     ):
         assert required in readme
