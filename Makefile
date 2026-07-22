@@ -1,4 +1,4 @@
-.PHONY: install dev test test-unit test-cov test-integration test-all lint format typecheck check db-upgrade db-check infra-up infra-down infra-logs infra-check infra-test-up infra-test-down
+.PHONY: install dev test test-cov lint format typecheck check
 
 install:
 	uv sync --locked
@@ -18,6 +18,9 @@ test-integration:
 
 test-all:
 	uv run pytest tests/unit tests/integration --cov=portfolio_analytics_api --cov-report=term-missing
+
+test-cov:
+	uv run pytest --cov=portfolio_analytics_api --cov-report=term-missing
 
 lint:
 	uv run ruff check .
