@@ -336,9 +336,33 @@ MarketDataProvider ---- Redis Cache
 - 若实现，必须通过同一 Provider contract test。
 - Provider 切换通过配置完成，不修改领域或应用逻辑。
 
+#### [x] W3.R Week 3里程碑审查（2–3h）
+
+依赖：W3.1、W3.2、W3.3、W3.4。
+
+工作内容：
+
+- 根据本计划逐项验证 W3.1–W3.4 的验收标准与完成状态。
+- 运行 `make check` 和 `make test-cov`，记录命令、结果及失败原因。
+- 审查金融计算正确性与边界测试、领域层依赖边界、测试网络隔离、
+  Provider 标准化、Redis 缓存和超时重试降级路径。
+- 按 P0、P1、P2、P3 输出带文件和行号的问题，并给出 PASS、
+  CONDITIONAL PASS 或 FAIL 结论。
+
+验收标准：
+
+- W3.1–W3.4 的全部验收标准均由当前仓库事实和可复现验证支持。
+- `make check` 和 `make test-cov` 均成功运行，W3 Redis 集成测试通过。
+- 不存在未解决的 P0 或 P1 问题，P2 和 P3 问题均已记录处置结论。
+- 最终审查结论为 PASS；CONDITIONAL PASS 或 FAIL 均不视为通过，不得勾选本任务。
+
+里程碑门禁：`W3.R` 勾选完成前，不得启动或继续任何后续 W3 任务；
+当前具体门禁对象为 W3.5。完成审查但结论未通过时保持 `[ ]`，在进度日志
+记录阻塞项并完成整改后重新审查。
+
 #### [ ] W3.5 实现多资产组合估值（6–8h）
 
-依赖：W2.4、W3.3。
+依赖：W2.4、W3.3、W3.R。
 
 工作内容：
 
@@ -565,6 +589,17 @@ GET  /health
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] W3.R 在最新 `origin/main` 基线
+  `4d684e3b188ba581b3157ccb22814c5c0d589f6c` 完成 W3.1–W3.4 里程碑审查；
+  审查开始时本地 `main` 与 `origin/main` 完全一致且工作区干净，最终结论为
+  PASS，未发现 P0、P1、P2 或 P3 问题。
+- 验证：`make check` 与 `make test-cov` 均通过，Ruff、format、mypy（50 个
+  源文件）和 95 项离线单元测试通过，branch coverage 为 87%；
+  `make test-integration` 7 项通过，包含真实 Redis round-trip、TTL 和过期验证；
+  默认 contract 入口运行 1 项并按设计跳过真实网络。领域层依赖扫描未发现
+  FastAPI、SQLAlchemy、Pandas、Redis 或 Provider 泄漏；W3.1–W3.4 完成状态
+  与仓库事实一致。W3.R 门禁通过，下一步：执行 `W3.5 实现多资产组合估值`。
 
 - [x] W3.4 完成第二 Provider 决策：W3.1-W3.3 的真实 Provider、离线 Fake、
   Redis 缓存、有限重试和 stale 降级均已通过验证，但必需的 W3.5 多资产
