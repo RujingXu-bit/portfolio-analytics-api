@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from portfolio_analytics_api.api.rate_limit import RateLimitPolicies
 from portfolio_analytics_api.api.schemas import (
     AnalysisSnapshotPageResponse,
     AnalysisSnapshotResponse,
@@ -24,6 +25,7 @@ from portfolio_analytics_api.application import (
     PortfolioAnalyticsService,
     PortfolioInsightService,
     PortfolioService,
+    RateLimiter,
     TransactionService,
 )
 from portfolio_analytics_api.domain import User
@@ -35,8 +37,15 @@ def build_portfolio_router(
     transaction_service: TransactionService,
     analytics_service: PortfolioAnalyticsService,
     insight_service: PortfolioInsightService,
+    rate_limiter: RateLimiter | None = None,
+    rate_limit_policies: RateLimitPolicies | None = None,
 ) -> APIRouter:
-    router = APIRouter(prefix="/portfolios", tags=["portfolios"])
+    policies = rate_limit_policies or RateLimitPolicies()
+    router = APIRouter(
+        prefix="/portfolios",
+        tags=["portfolios"],
+        responses={429: {"model": ErrorResponse}},
+    )
     bearer = HTTPBearer(auto_error=False)
 
     async def current_user(
@@ -46,6 +55,36 @@ def build_portfolio_router(
             raise InvalidAccessTokenError()
         return await authentication_service.authenticate(credentials.credentials)
 
+    async def standard_user(
+        user: Annotated[User, Depends(current_user)],
+    ) -> User:
+        if rate_limiter is not None:
+            await rate_limiter.enforce(
+                policies.authenticated_user,
+                f"user:{user.id}",
+            )
+        return user
+
+    async def analytics_user(
+        user: Annotated[User, Depends(current_user)],
+    ) -> User:
+        if rate_limiter is not None:
+            await rate_limiter.enforce(
+                policies.analytics_user,
+                f"user:{user.id}",
+            )
+        return user
+
+    async def insights_user(
+        user: Annotated[User, Depends(current_user)],
+    ) -> User:
+        if rate_limiter is not None:
+            await rate_limiter.enforce(
+                policies.insights_user,
+                f"user:{user.id}",
+            )
+        return user
+
     @router.post(
         "",
         response_model=PortfolioResponse,
@@ -54,7 +93,7 @@ def build_portfolio_router(
     )
     async def create_portfolio(
         request: CreatePortfolioRequest,
-        user: Annotated[User, Depends(current_user)],
+        user: Annotated[User, Depends(standard_user)],
     ) -> PortfolioResponse:
         portfolio = await portfolio_service.create(
             owner_id=user.id,
@@ -68,7 +107,7 @@ def build_portfolio_router(
         response_model=PortfolioPageResponse,
     )
     async def list_portfolios(
-        user: Annotated[User, Depends(current_user)],
+        user: Annotated[User, Depends(standard_user)],
         limit: Annotated[int, Query(ge=1, le=100)] = 20,
         offset: Annotated[int, Query(ge=0)] = 0,
     ) -> PortfolioPageResponse:
@@ -89,7 +128,7 @@ def build_portfolio_router(
     )
     async def get_portfolio(
         portfolio_id: UUID,
-        user: Annotated[User, Depends(current_user)],
+        user: Annotated[User, Depends(standard_user)],
     ) -> PortfolioResponse:
         portfolio = await portfolio_service.get(user.id, portfolio_id)
         return PortfolioResponse.model_validate(portfolio)
@@ -108,7 +147,7 @@ def build_portfolio_router(
         portfolio_id: UUID,
         request: TransactionInput,
         response: Response,
-        user: Annotated[User, Depends(current_user)],
+        user: Annotated[User, Depends(standard_user)],
     ) -> TransactionResponse:
         result = await transaction_service.create(
             user.id,
@@ -135,7 +174,7 @@ def build_portfolio_router(
     )
     async def list_transactions(
         portfolio_id: UUID,
-        user: Annotated[User, Depends(current_user)],
+        user: Annotated[User, Depends(standard_user)],
     ) -> list[TransactionResponse]:
         transactions = await transaction_service.list(user.id, portfolio_id)
         return [
@@ -152,7 +191,7 @@ def build_portfolio_router(
         portfolio_id: UUID,
         start_date: Annotated[date, Query(description="Inclusive first date")],
         end_date: Annotated[date, Query(description="Inclusive last date")],
-        user: Annotated[User, Depends(current_user)],
+        user: Annotated[User, Depends(analytics_user)],
     ) -> PortfolioAnalyticsResponse:
         analytics = await analytics_service.analyze(
             owner_id=user.id,
@@ -171,7 +210,7 @@ def build_portfolio_router(
         portfolio_id: UUID,
         start_date: Annotated[date, Query(description="Inclusive first date")],
         end_date: Annotated[date, Query(description="Inclusive last date")],
-        user: Annotated[User, Depends(current_user)],
+        user: Annotated[User, Depends(insights_user)],
     ) -> PortfolioInsightResponse:
         insight = await insight_service.generate(
             owner_id=user.id,
@@ -188,7 +227,7 @@ def build_portfolio_router(
     )
     async def list_portfolio_insights(
         portfolio_id: UUID,
-        user: Annotated[User, Depends(current_user)],
+        user: Annotated[User, Depends(insights_user)],
         limit: Annotated[int, Query(ge=1, le=100)] = 20,
         offset: Annotated[int, Query(ge=0)] = 0,
     ) -> AnalysisSnapshotPageResponse:

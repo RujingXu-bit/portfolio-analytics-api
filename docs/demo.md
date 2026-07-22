@@ -94,7 +94,9 @@ Show the CI and measured-performance sections in `README.md`: empty-database
 migration, offline unit/integration suites, non-root container smoke, and the
 reproducible cold/hot cache comparison. Close by naming the limits: historical
 analytics rather than prediction/advice, one real provider, no frontend,
-portfolio list, insight-history API, or production orchestration.
+second provider, refresh-token system, or completed public deployment. Mention
+that v1.1 adds dashboard queries and Redis request limits without changing the
+financial methodology.
 
 ## Demo recovery without hidden state
 

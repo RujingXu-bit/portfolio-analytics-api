@@ -24,6 +24,12 @@ class InsightGenerationError(RuntimeError):
     """Raised when an optional external insight generator cannot return safe output."""
 
 
+class RateLimitExceededError(RuntimeError):
+    def __init__(self, retry_after_seconds: int) -> None:
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__("request rate limit exceeded")
+
+
 class PortfolioNotFoundError(LookupError):
     def __init__(self, portfolio_id: UUID) -> None:
         super().__init__(f"portfolio {portfolio_id} was not found")

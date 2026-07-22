@@ -11,10 +11,11 @@ This V1 does not predict prices, automate trades, or guarantee returns. The LLM
 never calculates or overrides financial metrics or the deterministic risk
 classification. Unit tests and normal CI are fully offline.
 
-Current release: `1.0.0` / Git tag `v1.0.0`. See the
+Current release: `1.1.0` / Git tag `v1.1.0`. See the
 [release changelog](CHANGELOG.md), [three-minute demo](docs/demo.md), and
-[interview guide](docs/interview-guide.md). This is a portfolio-project V1,
-not a production-capacity claim or investment-advice service.
+[interview guide](docs/interview-guide.md). The public-demo deployment runbook
+is in [deployment](docs/deployment.md). This is a portfolio project, not a
+production-capacity claim or investment-advice service.
 
 完全不懂代码的使用者请从
 [中文零基础项目说明](docs/项目说明-零基础.md)开始。
@@ -125,6 +126,15 @@ Pydantic reads process variables first and a local `.env` second. Do not commit
 | `DEFAULT_BASE_CURRENCY` | `USD` | Validated project setting; V1 clients should still send `base_currency` explicitly when it is not USD. |
 | `JWT_SECRET_KEY` | required | Private HS256 signing value, at least 32 characters. |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access-token lifetime. |
+| `RATE_LIMIT_ENABLED` | `true` | Enables Redis fixed-window limits; failures still fail open. |
+| `RATE_LIMIT_TRUST_PROXY_HEADERS` | `false` | Trust the first `X-Forwarded-For` address only behind a controlled edge proxy. |
+| `RATE_LIMIT_HASH_KEY` | falls back to JWT secret | Separate HMAC key for hashing all rate-limit identifiers; set a distinct production secret. |
+| `RATE_LIMIT_NAMESPACE` | `portfolio-analytics` | Redis key prefix used to isolate this deployment. |
+| `RATE_LIMIT_REGISTRATION_IP_LIMIT` / `RATE_LIMIT_REGISTRATION_WINDOW_SECONDS` | `5` / `600` | Registration requests per hashed client IP per window. |
+| `RATE_LIMIT_LOGIN_IP_LIMIT` / `RATE_LIMIT_LOGIN_EMAIL_LIMIT` / `RATE_LIMIT_LOGIN_WINDOW_SECONDS` | `10` / `5` / `600` | Login requests per hashed IP and normalized-email digest per window. |
+| `RATE_LIMIT_ANALYTICS_USER_LIMIT` | `20` | Analytics requests per authenticated-user digest per minute. |
+| `RATE_LIMIT_INSIGHTS_USER_LIMIT` | `10` | Insight generation/history requests per user digest per minute. |
+| `RATE_LIMIT_AUTHENTICATED_USER_LIMIT` / `RATE_LIMIT_AUTHENTICATED_WINDOW_SECONDS` | `120` / `60` | Other authenticated requests per user digest per window. |
 | `DEEPSEEK_API_KEY` | empty | Optional; an empty value keeps insights deterministic and offline. |
 | `DEEPSEEK_MODEL` | `deepseek-v4-flash` | Model used only when the optional key is configured. |
 | `DEEPSEEK_TIMEOUT_SECONDS` | `8` | Hard application/client timeout for narrative generation. |
@@ -191,6 +201,12 @@ defaults to 20 and is capped at 100; `offset` defaults to zero. Portfolio rows
 are newest-first by creation time, and snapshots are newest-first by generation
 time, with IDs used as deterministic tie-breakers. Every result remains scoped
 to the authenticated owner.
+
+Public-demo request limits are documented in [deployment](docs/deployment.md).
+An exceeded limit returns 429 with `{"error":{"code":"rate_limited",...}}`
+and a whole-second `Retry-After` header. Redis keys contain keyed digests rather
+than plaintext emails, IPs, user IDs, JWTs, or request bodies. Redis failure is
+logged as `rate_limit_bypass` and the core request continues.
 
 ### Portfolio and transaction flow
 
@@ -385,9 +401,10 @@ docker run --rm --name portfolio-analytics-api \
   portfolio-analytics-api:local
 ```
 
-This is a local runtime artifact, not a production deployment recipe. Secret
-management, TLS, orchestration, high availability, and image publishing are
-outside V1.
+This remains the local invocation. The checked-in Render Blueprint and the
+Neon/Upstash secret, migration, health, and rollback procedure are documented
+in [public demo deployment](docs/deployment.md). That baseline does not claim
+high availability or a production SLA.
 
 ## Tests, CI, and measured performance
 
@@ -461,10 +478,10 @@ failure stops the job; external provider contracts are excluded.
 - The API provides historical analytics and informational risk explanations,
   not investment advice.
 
-The current codebase adds owner-scoped portfolio and insight-history queries
-after the `v1.0.0` release. It still has no refresh tokens, token revocation,
-second real market-data provider, frontend, automatic trading, multi-currency
-conversion, rate limiting, or production deployment.
+The `v1.1.0` backend adds owner-scoped portfolio/snapshot queries, Redis request
+limits, and reproducible Render/Neon/Upstash configuration. It still has no
+refresh tokens, token revocation, second real market-data provider, frontend,
+automatic trading, multi-currency conversion, or completed public deployment.
 
 ## Project structure
 

@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from portfolio_analytics_api.api.auth_routes import build_auth_router
 from portfolio_analytics_api.api.observability import RequestObservabilityMiddleware
+from portfolio_analytics_api.api.rate_limit import RateLimitPolicies
 from portfolio_analytics_api.api.routes import build_portfolio_router
 from portfolio_analytics_api.application import (
     AccessTokenService,
@@ -28,6 +29,8 @@ from portfolio_analytics_api.application import (
     PortfolioInsightService,
     PortfolioNotFoundError,
     PortfolioService,
+    RateLimiter,
+    RateLimitExceededError,
     TransactionIdempotencyConflictError,
     TransactionService,
     UnitOfWorkFactory,
@@ -48,6 +51,9 @@ def create_app(
     password_hasher: PasswordHasher,
     access_token_service: AccessTokenService,
     insight_generator: InsightGenerator | None = None,
+    rate_limiter: RateLimiter | None = None,
+    rate_limit_policies: RateLimitPolicies | None = None,
+    trust_proxy_headers: bool = False,
     shutdown_callback: Callable[[], Awaitable[None]] | None = None,
 ) -> FastAPI:
     @asynccontextmanager
@@ -56,7 +62,8 @@ def create_app(
         if shutdown_callback is not None:
             await shutdown_callback()
 
-    app = FastAPI(title="Portfolio Analytics API", lifespan=lifespan)
+    policies = rate_limit_policies or RateLimitPolicies()
+    app = FastAPI(title="Portfolio Analytics API", version="1.1.0", lifespan=lifespan)
     app.add_middleware(RequestObservabilityMiddleware)
     authentication_service = AuthenticationService(
         unit_of_work_factory=unit_of_work_factory,
@@ -82,9 +89,18 @@ def create_app(
             transaction_service,
             analytics_service,
             insight_service,
+            rate_limiter,
+            policies,
         )
     )
-    app.include_router(build_auth_router(authentication_service))
+    app.include_router(
+        build_auth_router(
+            authentication_service,
+            rate_limiter,
+            policies,
+            trust_proxy_headers,
+        )
+    )
 
     @app.exception_handler(AuthenticationError)
     async def authentication_error_handler(
@@ -105,6 +121,17 @@ def create_app(
             status.HTTP_409_CONFLICT,
             "email_already_registered",
             "email is already registered",
+        )
+
+    @app.exception_handler(RateLimitExceededError)
+    async def rate_limit_handler(
+        _request: Request, error: RateLimitExceededError
+    ) -> JSONResponse:
+        return _error_response(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "rate_limited",
+            str(error),
+            headers={"Retry-After": str(error.retry_after_seconds)},
         )
 
     @app.exception_handler(PortfolioNotFoundError)

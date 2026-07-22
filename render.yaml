@@ -1,0 +1,50 @@
+services:
+  - type: web
+    name: portfolio-analytics-api
+    runtime: docker
+    plan: starter
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: checksPass
+    dockerfilePath: ./Dockerfile
+    dockerCommand: >-
+      sh -c 'uvicorn portfolio_analytics_api.main:app --host 0.0.0.0 --port ${PORT:-10000}'
+    preDeployCommand: uv run alembic upgrade head
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: RATE_LIMIT_HASH_KEY
+        generateValue: true
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+      - key: RATE_LIMIT_TRUST_PROXY_HEADERS
+        value: "true"
+      - key: RATE_LIMIT_NAMESPACE
+        value: portfolio-analytics-public
+      - key: RATE_LIMIT_REGISTRATION_IP_LIMIT
+        value: "5"
+      - key: RATE_LIMIT_REGISTRATION_WINDOW_SECONDS
+        value: "600"
+      - key: RATE_LIMIT_LOGIN_IP_LIMIT
+        value: "10"
+      - key: RATE_LIMIT_LOGIN_EMAIL_LIMIT
+        value: "5"
+      - key: RATE_LIMIT_LOGIN_WINDOW_SECONDS
+        value: "600"
+      - key: RATE_LIMIT_ANALYTICS_USER_LIMIT
+        value: "20"
+      - key: RATE_LIMIT_INSIGHTS_USER_LIMIT
+        value: "10"
+      - key: RATE_LIMIT_AUTHENTICATED_USER_LIMIT
+        value: "120"
+      - key: RATE_LIMIT_AUTHENTICATED_WINDOW_SECONDS
+        value: "60"

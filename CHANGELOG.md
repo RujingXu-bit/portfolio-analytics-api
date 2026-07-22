@@ -3,6 +3,45 @@
 All notable changes to this project are documented here. The format follows
 Keep a Changelog conventions, and package versions follow PEP 440.
 
+## [1.1.0] - 2026-07-22
+
+First public-demo backend enhancement release. The corresponding Git tag is
+`v1.1.0`.
+
+### Added
+
+- Owner-scoped, newest-first, offset-paginated Portfolio listing and
+  AnalysisSnapshot history APIs, including compatibility with nullable RC-era
+  snapshot provenance.
+- Redis fixed-window limits for registration, login IP and keyed email,
+  analytics, insights, and other authenticated routes. Rate-limit identifiers
+  are HMAC-SHA256 digests; 429 responses use the stable `rate_limited` code and
+  `Retry-After`.
+- Fail-open Redis degradation with secret-safe `rate_limit_bypass` logging.
+- A Render Docker Blueprint and Neon/Upstash deployment runbook for the later
+  public-demo deployment task.
+
+### Security and deployment notes
+
+- Forwarded client-IP headers are disabled by default and enabled only in the
+  Render Blueprint, where Render is the trusted edge proxy.
+- The public configuration intentionally omits `DEEPSEEK_API_KEY`; deterministic
+  risk summaries remain the reliable default.
+- This configuration is a portfolio-demo baseline, not a production SLA,
+  high-availability design, or authorization boundary.
+
+### Release verification
+
+- `make check` passed Ruff, formatting, strict mypy over 85 source files, and
+  177 offline unit tests at 89% branch coverage.
+- `make test-all` passed all 192 unit/integration tests at 93% branch coverage,
+  including empty-database migrations and a real Redis concurrent fixed-window
+  boundary/expiry check.
+- The production-only non-root image passed `make image-smoke`; `uv build`
+  produced the `1.1.0` wheel and source distribution with Python `>=3.12`
+  metadata. `uv lock --check`, `make db-check`, Compose validation, Render YAML
+  parsing, and `git diff --check` also passed.
+
 ## [1.0.0] - 2026-07-22
 
 First general-availability V1 release. This promotes the accepted

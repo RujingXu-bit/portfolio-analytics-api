@@ -13,6 +13,7 @@ from portfolio_analytics_api.application.errors import (
     PortfolioAlreadyExistsError,
     PortfolioAnalyticsUnavailableError,
     PortfolioNotFoundError,
+    RateLimitExceededError,
     TransactionIdempotencyConflictError,
 )
 from portfolio_analytics_api.application.ports import (
@@ -23,6 +24,8 @@ from portfolio_analytics_api.application.ports import (
     MarketDataResult,
     PasswordHasher,
     PortfolioRepository,
+    RateLimiter,
+    RateLimitRule,
     TransactionRepository,
     UnitOfWork,
     UnitOfWorkFactory,
@@ -71,6 +74,9 @@ __all__ = [
     "PortfolioPage",
     "PortfolioRepository",
     "PortfolioService",
+    "RateLimitExceededError",
+    "RateLimiter",
+    "RateLimitRule",
     "TransactionCreation",
     "TransactionIdempotencyConflictError",
     "TransactionRepository",

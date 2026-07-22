@@ -20,6 +20,9 @@ from portfolio_analytics_api.infrastructure.memory import (
     InMemoryTransactionRepository,
     InMemoryUnitOfWork,
 )
+from portfolio_analytics_api.infrastructure.rate_limit import (
+    RedisFixedWindowRateLimiter,
+)
 
 __all__ = [
     "Argon2PasswordHasher",
@@ -35,5 +38,6 @@ __all__ = [
     "JwtAccessTokenService",
     "ObservedMarketDataProvider",
     "RetryingMarketDataProvider",
+    "RedisFixedWindowRateLimiter",
     "YFinanceMarketDataProvider",
 ]

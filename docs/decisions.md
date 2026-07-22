@@ -1,5 +1,37 @@
 # Architecture Decisions
 
+## 2026-07-22: HMAC-keyed, fail-open fixed-window request limits
+
+### Context
+
+A public portfolio demo needs predictable abuse controls without making Redis
+an availability dependency or putting email addresses, JWTs, request bodies,
+or raw user identifiers into cache keys and logs. Authentication endpoints need
+IP and account dimensions, while expensive analytics and insight generation
+need tighter budgets than ordinary reads and writes.
+
+### Decision
+
+- Implement one atomic Redis Lua increment/expiry operation per calendar-aligned
+  fixed window and return the Redis TTL as `Retry-After` after the boundary.
+- Use separate configurable rules for registration IP, login IP, normalized
+  login email, analytics user, insights user, and general authenticated user.
+- HMAC-SHA256 every complete identifier with a deployment secret before key
+  construction; logs never receive the source identifier or digest.
+- Return `429 rate_limited` through the shared JSON error envelope.
+- Treat any Redis or script-response failure as `rate_limit_bypass`, log only
+  the exception type, and allow the core request to continue.
+- Trust forwarded client IPs only when explicitly configured behind Render's
+  controlled proxy. Leave proxy trust disabled by default.
+
+### Trade-offs
+
+Fixed windows are inexpensive and easy to explain but permit bursts across a
+bucket boundary. Fail-open behavior preserves the portfolio's core workflow
+during cache failure, but rate limiting then offers no protection until Redis
+recovers. A dedicated gateway or fail-closed distributed limiter would be more
+appropriate for a high-risk production service; neither is justified here.
+
 ## 2026-07-22: Owner-scoped offset pagination for dashboard queries
 
 ### Context

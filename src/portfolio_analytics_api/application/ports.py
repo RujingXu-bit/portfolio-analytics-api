@@ -83,6 +83,21 @@ class AccessTokenService(Protocol):
     def verify(self, token: str) -> UUID: ...
 
 
+@dataclass(frozen=True, slots=True)
+class RateLimitRule:
+    scope: str
+    limit: int
+    window_seconds: int
+
+    def __post_init__(self) -> None:
+        if not self.scope or self.limit < 1 or self.window_seconds < 1:
+            raise ValueError("rate-limit rule requires a scope and positive limits")
+
+
+class RateLimiter(Protocol):
+    async def enforce(self, rule: RateLimitRule, identifier: str) -> None: ...
+
+
 class InsightGenerator(Protocol):
     @property
     def generator_name(self) -> str: ...
