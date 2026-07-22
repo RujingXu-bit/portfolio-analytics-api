@@ -35,6 +35,19 @@ class Settings(BaseSettings):
     default_base_currency: str = Field(default="USD", min_length=3, max_length=3)
     jwt_secret_key: SecretStr | None = Field(default=None, min_length=32)
     access_token_expire_minutes: int = Field(default=30, gt=0)
+    rate_limit_enabled: bool = True
+    rate_limit_trust_proxy_headers: bool = False
+    rate_limit_hash_key: SecretStr | None = Field(default=None, min_length=32)
+    rate_limit_namespace: str = Field(default="portfolio-analytics", min_length=1)
+    rate_limit_registration_ip_limit: int = Field(default=5, gt=0)
+    rate_limit_registration_window_seconds: int = Field(default=600, gt=0)
+    rate_limit_login_ip_limit: int = Field(default=10, gt=0)
+    rate_limit_login_email_limit: int = Field(default=5, gt=0)
+    rate_limit_login_window_seconds: int = Field(default=600, gt=0)
+    rate_limit_analytics_user_limit: int = Field(default=20, gt=0)
+    rate_limit_insights_user_limit: int = Field(default=10, gt=0)
+    rate_limit_authenticated_user_limit: int = Field(default=120, gt=0)
+    rate_limit_authenticated_window_seconds: int = Field(default=60, gt=0)
     deepseek_api_key: SecretStr | None = None
     deepseek_model: str = Field(default="deepseek-v4-flash", min_length=1)
     deepseek_timeout_seconds: float = Field(default=8.0, gt=0)

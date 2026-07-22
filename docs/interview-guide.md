@@ -120,9 +120,10 @@ missing key returns `risk-rules-v1` without breaking analytics.
 
 It proves the lockfile installs, static checks pass, unit tests are offline, an
 empty PostgreSQL database migrates without drift, PostgreSQL/Redis integration
-passes, and the non-root runtime image starts. It does not prove yfinance or
-DeepSeek availability, production capacity, TLS, orchestration, or high
-availability.
+passes, and the non-root runtime image starts. The v1.1 tests also cover atomic
+rate-limit boundaries, expiry, failure bypass, and identifier hashing. CI does
+not prove yfinance or DeepSeek availability, production capacity, an actual
+cloud deployment, or high availability.
 
 ### What do the load-test numbers mean?
 
@@ -134,8 +135,7 @@ and must not be presented as capacity planning.
 
 ### What would you build next?
 
-Choose from evidence: production secret/TLS/orchestration work, a live dated
-risk-free-rate source, portfolio and snapshot listing, token revocation, or a
-second provider if availability requirements justify it. Do not add prediction,
-automatic trading, or distributed infrastructure merely for architecture
-theater.
+Choose from evidence: deploy and accept the independent frontend, add a live
+dated risk-free-rate source, token revocation, CSV import, or a second provider
+if availability requirements justify it. Do not add prediction, automatic
+trading, or distributed infrastructure merely for architecture theater.

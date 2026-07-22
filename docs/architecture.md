@@ -9,6 +9,7 @@ financial algorithms.
 ```text
 RequestObservabilityMiddleware (request ID + structured request log)
     -> FastAPI route
+    -> Redis fixed-window request policy (fail-open)
     -> AuthenticationService / PortfolioService / TransactionService
        / PortfolioAnalyticsService
         -> Argon2 PasswordHasher / JWT AccessTokenService
@@ -25,6 +26,22 @@ RequestObservabilityMiddleware (request ID + structured request log)
 
 The API layer validates and serializes HTTP data. It does not calculate
 financial metrics or access repository storage directly.
+
+The E1.2 request boundary applies Redis-backed fixed windows after request
+validation. Registration uses a client-IP scope; login uses both client IP and
+normalized email; authenticated routes use the verified user ID, with separate
+analytics, insights, and general budgets. Every identifier is HMAC-SHA256
+digested before it becomes part of a Redis key. The Lua increment/expiry pair is
+atomic per bucket. Exceeded limits return the same 429 envelope and a
+`Retry-After` value; Redis or response-parse failure records only
+`rate_limit_bypass` plus the exception type and allows the use case to continue.
+This protects shared demo capacity but is deliberately not an authorization
+boundary.
+
+Client-IP forwarding is disabled by default. The Render deployment alone
+enables the first `X-Forwarded-For` address because its edge proxy is trusted;
+directly reachable deployments must leave it disabled or provide an equivalent
+trusted-proxy boundary.
 
 Every HTTP request is assigned a UUID request ID. A valid incoming
 `X-Request-ID` is normalized and retained; an absent or malformed value is
@@ -152,6 +169,8 @@ database schema.
 W4.3-W4.4 expose owner-scoped risk insights with deterministic
 classification, optional DeepSeek narrative enrichment, Redis result caching,
 strict fallback, durable analysis provenance, and paginated snapshot history.
+E1.2 adds configurable, fail-open Redis request limits and a Docker deployment
+baseline; D1.1 still owns creating and accepting the actual public services.
 
 ## CI and runtime image
 
@@ -170,8 +189,10 @@ and runs as numeric user `10001`. Application startup never migrates the
 database: an operator or deployment job must run `alembic upgrade head` before
 starting a release. The image smoke command inspects the configured user and
 starts an ephemeral container on a random loopback port to verify `/health` and
-the response request ID. The image is a local V1 artifact; production
-orchestration, TLS termination, and release publishing remain outside W5.3.
+the response request ID. E1.2 adds a Render Blueprint that reuses this image,
+runs migrations in a separate pre-deploy step, and delegates TLS termination
+and runtime secrets to Render. Actual cloud provisioning and acceptance remain
+D1.1 work, and the design does not claim high availability.
 
 ## Local load-test boundary
 
