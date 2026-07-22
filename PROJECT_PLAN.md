@@ -338,7 +338,7 @@ MarketDataProvider ---- Redis Cache
 
 #### [x] W3.5 实现多资产组合估值（6–8h）
 
-依赖：W2.4、W3.3。
+依赖：W2.4、W3.3、W3.R。
 
 工作内容：
 
