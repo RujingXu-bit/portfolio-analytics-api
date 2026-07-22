@@ -17,6 +17,8 @@ class DemoConfig:
     base_url: str
     email: str
     password: str
+    other_email: str
+    other_password: str
     symbol: str
     start_date: date
     end_date: date
@@ -61,6 +63,15 @@ def run_demo(client: httpx.Client, config: DemoConfig) -> dict[str, object]:
     portfolio_id = _required_string(portfolio, "id")
     portfolio_path = f"/portfolios/{portfolio_id}"
     _request(client, "GET", portfolio_path, expected_status=200, headers=headers)
+    portfolio_page = _json_object(
+        _request(client, "GET", "/portfolios", expected_status=200, headers=headers)
+    )
+    portfolio_listed = any(
+        isinstance(item, dict) and item.get("id") == portfolio_id
+        for item in _required_array(portfolio_page, "items")
+    )
+    if not portfolio_listed:
+        raise DemoError("created portfolio did not appear in the owner-scoped list")
 
     start = config.start_date.isoformat()
     deposit_payload = {
@@ -147,11 +158,81 @@ def run_demo(client: httpx.Client, config: DemoConfig) -> dict[str, object]:
             params=query,
         )
     )
+    if (
+        insight.get("generator") != "deterministic_rules"
+        or insight.get("model_name") is not None
+    ):
+        raise DemoError("public insight did not use the deterministic fallback")
+    snapshot_page = _json_object(
+        _request(
+            client,
+            "GET",
+            f"{portfolio_path}/insights",
+            expected_status=200,
+            headers=headers,
+        )
+    )
+    snapshots = _required_array(snapshot_page, "items")
+    snapshot_persisted = any(
+        isinstance(item, dict)
+        and item.get("as_of") == insight.get("as_of")
+        and item.get("generator") == insight.get("generator")
+        and item.get("prompt_version") == insight.get("prompt_version")
+        for item in snapshots
+    )
+    if not snapshot_persisted:
+        raise DemoError("generated insight did not appear in snapshot history")
+
+    _request(
+        client,
+        "POST",
+        "/auth/register",
+        expected_status=201,
+        json={"email": config.other_email, "password": config.other_password},
+    )
+    other_login = _json_object(
+        _request(
+            client,
+            "POST",
+            "/auth/login",
+            expected_status=200,
+            json={"email": config.other_email, "password": config.other_password},
+        )
+    )
+    other_access_token = other_login.get("access_token")
+    if not isinstance(other_access_token, str) or not other_access_token:
+        raise DemoError("second login response did not contain an access token")
+    other_headers = {"Authorization": f"Bearer {other_access_token}"}
+    foreign_response = _request(
+        client,
+        "GET",
+        portfolio_path,
+        expected_status=404,
+        headers=other_headers,
+    )
+    missing_response = _request(
+        client,
+        "GET",
+        f"/portfolios/{uuid4()}",
+        expected_status=404,
+        headers=other_headers,
+    )
+    ownership_isolated = (
+        _error_code(foreign_response)
+        == _error_code(missing_response)
+        == "portfolio_not_found"
+    )
+    if not ownership_isolated:
+        raise DemoError("cross-user and missing Portfolio errors did not match")
 
     return {
         "portfolio_id": portfolio_id,
+        "portfolio_listed": portfolio_listed,
         "transaction_count": len(transactions),
         "idempotent_replay": idempotent_replay,
+        "snapshot_history_count": len(snapshots),
+        "snapshot_persisted": snapshot_persisted,
+        "ownership_isolated": ownership_isolated,
         "analytics": {
             "as_of": analytics.get("as_of"),
             "simple_return": analytics.get("simple_return"),
@@ -225,6 +306,22 @@ def _required_string(body: dict[str, Any], field: str) -> str:
     return value
 
 
+def _required_array(body: dict[str, Any], field: str) -> list[Any]:
+    value = body.get(field)
+    if not isinstance(value, list):
+        raise DemoError(f"API response did not contain a list field named {field}")
+    return value
+
+
+def _error_code(response: httpx.Response) -> str | None:
+    body = _json_object(response)
+    error = body.get("error")
+    if not isinstance(error, dict):
+        return None
+    code = error.get("code")
+    return code if isinstance(code, str) else None
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run the V1 release flow through public HTTP APIs."
@@ -248,6 +345,8 @@ def main() -> None:
         base_url=args.base_url,
         email=args.email or f"v1-demo-{suffix}@example.com",
         password=f"v1-demo-password-{suffix}",
+        other_email=f"v1-demo-other-{suffix}@example.com",
+        other_password=f"v1-demo-other-password-{suffix}",
         symbol=args.symbol,
         start_date=args.start_date,
         end_date=args.end_date,
