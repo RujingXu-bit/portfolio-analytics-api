@@ -49,6 +49,63 @@ and non-positive or non-finite prices are invalid inputs.
 Fewer than two prices produce no daily returns. This is represented by an
 empty return sequence rather than an invented zero return.
 
+## Multi-asset portfolio valuation
+
+Portfolio analytics replay the ordered transaction ledger through each market
+observation date in the requested inclusive range. A transaction takes effect
+on the UTC calendar date derived from its aware `occurred_at` timestamp. Only
+transactions on or before a valuation date are included, so a future trade can
+never alter an earlier value.
+
+End-of-day portfolio value is:
+
+```text
+portfolio value = cash balance + sum(position quantity × latest known price)
+```
+
+Cash is an explicit portfolio asset. DEPOSIT increases cash and WITHDRAWAL
+decreases it; their stated cash amounts are external flows. BUY exchanges cash
+for a position and SELL exchanges a position for cash. Every transaction fee
+reduces cash and therefore portfolio value on its UTC date.
+
+W2 deliberately allowed imported BUY records without matching DEPOSIT records.
+To keep those ledgers analyzable, a BUY whose cost exceeds available cash
+creates an implicit external contribution for exactly the shortfall. This keeps
+cash at zero rather than inventing a negative margin balance. A WITHDRAWAL still
+requires available cash and fails valuation otherwise. The implicit contribution
+is included in cash-flow adjustment and is not treated as investment return.
+
+For consecutive valuatable dates, the simple portfolio return is:
+
+```text
+period return = (current value - net external flow) / previous value - 1
+```
+
+`net external flow` includes DEPOSIT, negative WITHDRAWAL, and any implicit BUY
+funding since the previous emitted valuation. Trades funded by existing cash are
+internal transfers. Fees remain in performance because they reduce current
+value but are not removed from the numerator as external flows.
+
+The range `simple_return` compounds these cash-flow-adjusted period returns.
+Volatility and Sharpe Ratio use the same period-return series. Maximum drawdown
+is calculated from its cumulative wealth index, not raw portfolio value, so a
+deposit cannot create an artificial gain or reset a drawdown.
+
+## Multi-asset date alignment and weights
+
+Each required symbol is requested independently through the same
+`MarketDataProvider`. Valuation dates are the sorted union of provider market
+dates. A price may be carried forward only after it has been observed; the
+system never backfills from a future observation. Dates before every active
+position has an observed price are omitted. A required symbol with no usable
+price in the entire requested range produces a stable analytics error.
+
+The API returns each latest non-zero security position as an `asset_weight`
+with its exact Decimal market value and weight relative to total portfolio
+value, including cash in the denominator. Consequently, security weights may
+sum to less than one when the portfolio holds cash. These weights are the
+concentration input for W4.3.
+
 ## Annualization
 
 The default annualization period is 252 trading days. The value is exposed as
@@ -115,18 +172,11 @@ failure exhausts its bounded retries and analytics use a validated retained
 cache copy. Invalid symbols, deterministic data errors, and corrupt cache
 payloads never produce stale results.
 
-For the current analytics API, `simple_return` is the simple return from the first
-to the last adjusted-close observation inside the inclusive requested date
-range. `as_of` is the date of that last available observation, which may be
-earlier than the requested end date. Volatility and Sharpe ratio use all simple
-daily returns within the range; maximum drawdown uses all adjusted-close
-observations within the range.
-
-The persistent analytics slice derives the market-data symbol from stored BUY
-or SELL transactions and requires exactly one traded symbol. DEPOSIT and
-WITHDRAWAL are persisted but do not alter the current price-return series. The
-API does not yet derive multi-asset weights or transaction-time cash flows;
-that work is tracked separately before concentration-based risk summaries.
+For the current analytics API, `as_of` is the last emitted portfolio valuation
+date, which may be earlier than the requested end date. The response includes
+the latest exact portfolio value, cash balance, asset weights, four metrics,
+methodology, and aggregate market-data `stale` status. Undefined statistics are
+still represented by `None`.
 
 The analytics API reports historical measurements. It does not predict prices,
 guarantee returns, or provide automatic buy or sell advice.

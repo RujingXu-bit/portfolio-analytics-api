@@ -17,8 +17,8 @@
 
 ### 当前状态
 
-- 项目阶段：Week 3 进行中，W3.1–W3.4 已完成。
-- 当前优先任务：`W3.5`。
+- 项目阶段：Week 4 准备开始，W3.1–W3.5 已完成。
+- 当前优先任务：`W4.1`。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
 
@@ -336,7 +336,7 @@ MarketDataProvider ---- Redis Cache
 - 若实现，必须通过同一 Provider contract test。
 - Provider 切换通过配置完成，不修改领域或应用逻辑。
 
-#### [ ] W3.5 实现多资产组合估值（6–8h）
+#### [x] W3.5 实现多资产组合估值（6–8h）
 
 依赖：W2.4、W3.3。
 
@@ -565,6 +565,22 @@ GET  /health
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] W3.5 完成无前视偏差的多资产组合估值：按 UTC 交易发生时间重放
+  账本，以现金加各标的最新已知 adjusted close 市值构造每日组合价值；
+  DEPOSIT、WITHDRAWAL 和未入金 BUY 的资金缺口作为外部现金流，交易费用
+  始终减少组合价值和收益。WITHDRAWAL 超过现金时返回稳定错误，不引入隐含
+  杠杆。
+- 多标的价格并发通过同一 `MarketDataProvider` 获取，估值日期使用观测日并集，
+  只前向沿用已经观察到的价格，不使用未来价格；必需标的在请求区间完全无
+  数据、无证券持仓或无法形成正组合价值时返回稳定 analytics 错误。API 新增
+  Decimal 组合总值、现金余额和以总组合价值（含现金）为分母的最新资产权重，
+  可直接供 W4.3 使用。
+- 验证：15 项聚焦估值测试通过且该关键领域模块 branch coverage 为 95%；
+  PostgreSQL API/Repository 聚焦集成测试 6 项通过；`make check` 通过 Ruff、
+  format、mypy（52 个源文件）及 111 项离线单元测试；`make test-all` 共 119 项
+  通过，综合 branch coverage 为 93%；`uv lock --check` 与 `git diff --check`
+  通过。下一步：执行 `W4.1 实现认证`。
 
 - [x] W3.4 完成第二 Provider 决策：W3.1-W3.3 的真实 Provider、离线 Fake、
   Redis 缓存、有限重试和 stale 降级均已通过验证，但必需的 W3.5 多资产

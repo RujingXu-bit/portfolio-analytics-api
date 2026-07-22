@@ -1,7 +1,9 @@
 from portfolio_analytics_api.domain.analytics import (
     InvalidPriceSeriesError,
     calculate_annualized_volatility,
+    calculate_compounded_return,
     calculate_max_drawdown,
+    calculate_max_drawdown_from_returns,
     calculate_sharpe_ratio,
     calculate_simple_returns,
 )
@@ -12,8 +14,11 @@ from portfolio_analytics_api.domain.holdings import (
 )
 from portfolio_analytics_api.domain.models import (
     AnalyticsMethodology,
+    AssetWeight,
     Portfolio,
     PortfolioAnalytics,
+    PortfolioValuation,
+    PortfolioValuePoint,
     Position,
     PriceBar,
     PriceBasis,
@@ -21,13 +26,22 @@ from portfolio_analytics_api.domain.models import (
     Transaction,
     TransactionType,
 )
+from portfolio_analytics_api.domain.valuation import (
+    InvalidPortfolioValuationError,
+    build_portfolio_valuation,
+    required_price_symbols,
+)
 
 __all__ = [
     "AnalyticsMethodology",
+    "AssetWeight",
+    "InvalidPortfolioValuationError",
     "InvalidPriceSeriesError",
     "InvalidTransactionError",
     "Portfolio",
     "PortfolioAnalytics",
+    "PortfolioValuation",
+    "PortfolioValuePoint",
     "Position",
     "PriceBar",
     "PriceBasis",
@@ -35,9 +49,13 @@ __all__ = [
     "Transaction",
     "TransactionType",
     "calculate_annualized_volatility",
+    "calculate_compounded_return",
     "calculate_max_drawdown",
+    "calculate_max_drawdown_from_returns",
     "calculate_sharpe_ratio",
     "calculate_simple_returns",
+    "build_portfolio_valuation",
     "derive_positions",
+    "required_price_symbols",
     "validate_transaction",
 ]
