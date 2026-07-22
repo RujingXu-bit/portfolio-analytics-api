@@ -4,17 +4,30 @@ from decimal import Decimal
 import httpx
 import pytest
 from fastapi import FastAPI
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from portfolio_analytics_api.api import create_app
-from portfolio_analytics_api.application import UnitOfWork
+from portfolio_analytics_api.application import InsightGenerator, UnitOfWork
 from portfolio_analytics_api.core import Settings
-from portfolio_analytics_api.domain import AnalyticsMethodology, PriceBar
-from portfolio_analytics_api.infrastructure import FakeMarketDataProvider
+from portfolio_analytics_api.domain import (
+    AnalyticsMethodology,
+    GeneratedInsight,
+    PriceBar,
+)
+from portfolio_analytics_api.infrastructure import (
+    Argon2PasswordHasher,
+    FakeInsightGenerator,
+    FakeMarketDataProvider,
+    JwtAccessTokenService,
+)
 from portfolio_analytics_api.infrastructure.database import (
     SqlAlchemyUnitOfWork,
     create_database_engine,
     create_session_factory,
+)
+from portfolio_analytics_api.infrastructure.database.models import (
+    AnalysisSnapshotRecord,
 )
 
 PRICES = (
@@ -34,7 +47,10 @@ METHODOLOGY = AnalyticsMethodology(
 )
 
 
-def build_test_app(engine: AsyncEngine) -> FastAPI:
+def build_test_app(
+    engine: AsyncEngine,
+    insight_generator: InsightGenerator | None = None,
+) -> FastAPI:
     session_factory = create_session_factory(engine)
 
     def unit_of_work_factory() -> UnitOfWork:
@@ -46,6 +62,12 @@ def build_test_app(engine: AsyncEngine) -> FastAPI:
             {"DEMO": PRICES, "OTHER": OTHER_PRICES}
         ),
         methodology=METHODOLOGY,
+        password_hasher=Argon2PasswordHasher(),
+        access_token_service=JwtAccessTokenService(
+            secret_key="integration-test-secret-key-32-characters",
+            expire_minutes=30,
+        ),
+        insight_generator=insight_generator,
         shutdown_callback=engine.dispose,
     )
 
@@ -68,6 +90,24 @@ def buy_payload(
     }
 
 
+async def authenticate(
+    client: httpx.AsyncClient,
+    email: str = "owner@example.com",
+    password: str = "persistent owner password",
+) -> str:
+    registration = await client.post(
+        "/auth/register", json={"email": email, "password": password}
+    )
+    assert registration.status_code == 201
+    login = await client.post(
+        "/auth/login", json={"email": email, "password": password}
+    )
+    assert login.status_code == 200
+    token = str(login.json()["access_token"])
+    client.headers["Authorization"] = f"Bearer {token}"
+    return token
+
+
 @pytest.mark.anyio
 async def test_all_endpoints_persist_across_app_and_engine_recreation(
     database_engine: AsyncEngine,
@@ -77,6 +117,7 @@ async def test_all_endpoints_persist_across_app_and_engine_recreation(
     async with httpx.AsyncClient(
         transport=first_transport, base_url="http://test"
     ) as client:
+        access_token = await authenticate(client)
         portfolio_response = await client.post(
             "/portfolios", json={"name": "Persistent", "base_currency": "USD"}
         )
@@ -101,6 +142,7 @@ async def test_all_endpoints_persist_across_app_and_engine_recreation(
         async with httpx.AsyncClient(
             transport=second_transport, base_url="http://test"
         ) as client:
+            client.headers["Authorization"] = f"Bearer {access_token}"
             portfolio_after_restart = await client.get(f"/portfolios/{portfolio_id}")
             transactions_after_restart = await client.get(
                 f"/portfolios/{portfolio_id}/transactions"
@@ -127,6 +169,7 @@ async def test_persistent_api_values_multiple_assets(
     app = build_test_app(database_engine)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await authenticate(client)
         portfolio = await client.post("/portfolios", json={"name": "Multi asset"})
         portfolio_id = portfolio.json()["id"]
         await client.post(
@@ -164,6 +207,7 @@ async def test_persistent_api_maps_idempotency_and_domain_errors(
     app = build_test_app(database_engine)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await authenticate(client)
         portfolio = await client.post("/portfolios", json={"name": "Errors"})
         portfolio_id = portfolio.json()["id"]
         oversell = await client.post(
@@ -188,3 +232,88 @@ async def test_persistent_api_maps_idempotency_and_domain_errors(
     assert retry.json()["id"] == first.json()["id"]
     assert conflict.status_code == 409
     assert conflict.json()["error"]["code"] == "transaction_idempotency_conflict"
+
+
+@pytest.mark.anyio
+async def test_persistent_api_denies_cross_user_direct_id_access(
+    database_engine: AsyncEngine,
+) -> None:
+    app = build_test_app(database_engine)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await authenticate(client)
+        portfolio = await client.post("/portfolios", json={"name": "Private"})
+        portfolio_id = portfolio.json()["id"]
+        await client.post(
+            f"/portfolios/{portfolio_id}/transactions", json=buy_payload()
+        )
+
+        await authenticate(
+            client,
+            email="other@example.com",
+            password="persistent other password",
+        )
+        responses = (
+            await client.get(f"/portfolios/{portfolio_id}"),
+            await client.get(f"/portfolios/{portfolio_id}/transactions"),
+            await client.post(
+                f"/portfolios/{portfolio_id}/transactions",
+                json=buy_payload(external_id="other-buy"),
+            ),
+            await client.get(
+                f"/portfolios/{portfolio_id}/analytics",
+                params={"start_date": "2026-01-02", "end_date": "2026-01-06"},
+            ),
+        )
+
+    assert all(response.status_code == 404 for response in responses)
+    assert all(
+        response.json()["error"]["code"] == "portfolio_not_found"
+        for response in responses
+    )
+
+
+@pytest.mark.anyio
+async def test_generated_insight_persists_model_prompt_and_input_summary(
+    database_engine: AsyncEngine,
+) -> None:
+    generator = FakeInsightGenerator(
+        GeneratedInsight(
+            summary=(
+                "Historical metrics indicate material variability and "
+                "single-security concentration."
+            ),
+            additional_limitations=("The observation window is limited.",),
+        ),
+        generator_name="deepseek",
+        model_name="deepseek-v4-flash",
+        prompt_version="deepseek-risk-summary-v1",
+    )
+    app = build_test_app(database_engine, generator)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        await authenticate(client)
+        portfolio = await client.post("/portfolios", json={"name": "Snapshot"})
+        portfolio_id = portfolio.json()["id"]
+        await client.post(
+            f"/portfolios/{portfolio_id}/transactions", json=buy_payload()
+        )
+        response = await client.post(
+            f"/portfolios/{portfolio_id}/insights",
+            params={"start_date": "2026-01-02", "end_date": "2026-01-06"},
+        )
+
+    session_factory = create_session_factory(database_engine)
+    async with session_factory() as session:
+        snapshot = await session.scalar(select(AnalysisSnapshotRecord))
+
+    assert response.status_code == 200
+    assert snapshot is not None
+    assert snapshot.generator == "deepseek"
+    assert snapshot.model_name == "deepseek-v4-flash"
+    assert snapshot.prompt_version == "deepseek-risk-summary-v1"
+    assert snapshot.summary == response.json()["summary"]
+    assert snapshot.metrics["as_of"] == "2026-01-06"
+    assert snapshot.metrics["asset_weights"] == [{"symbol": "DEMO", "weight": "1"}]
+    assert snapshot.methodology["price_basis"] == "adjusted_close"
+    assert snapshot.generated_at is not None

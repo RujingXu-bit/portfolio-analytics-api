@@ -7,12 +7,18 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    SecretStr,
     StringConstraints,
     field_validator,
     model_validator,
 )
 
-from portfolio_analytics_api.domain import PriceBasis, ReturnType, TransactionType
+from portfolio_analytics_api.domain import (
+    PriceBasis,
+    ReturnType,
+    RiskLevel,
+    TransactionType,
+)
 
 NonEmptyString = Annotated[
     str,
@@ -36,6 +42,39 @@ CurrencyCode = Annotated[
         pattern=r"^[A-Z]{3}$",
     ),
 ]
+EmailAddress = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        to_lower=True,
+        min_length=3,
+        max_length=320,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+    ),
+]
+
+
+class RegisterRequest(BaseModel):
+    email: EmailAddress
+    password: SecretStr = Field(min_length=12, max_length=128)
+
+
+class LoginRequest(BaseModel):
+    email: EmailAddress
+    password: SecretStr = Field(min_length=1, max_length=128)
+
+
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    email: str
+
+
+class AccessTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
 
 
 class TransactionInput(BaseModel):
@@ -152,6 +191,21 @@ class PortfolioAnalyticsResponse(BaseModel):
     cash_balance: Decimal
     asset_weights: list[AssetWeightResponse]
     methodology: MethodologyResponse
+    stale: bool
+
+
+class PortfolioInsightResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    as_of: date
+    risk_level: RiskLevel
+    summary: str
+    key_factors: list[str]
+    limitations: list[str]
+    disclaimer: str
+    generator: str
+    model_name: str | None
+    prompt_version: str
     stale: bool
 
 

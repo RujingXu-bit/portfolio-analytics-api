@@ -20,6 +20,7 @@ async def test_in_memory_repository_stores_and_retrieves_portfolio() -> None:
     repository = InMemoryPortfolioRepository()
     portfolio = Portfolio(
         id=UUID("00000000-0000-0000-0000-000000000001"),
+        owner_id=UUID("00000000-0000-0000-0000-000000000002"),
         name="Long-term portfolio",
     )
 

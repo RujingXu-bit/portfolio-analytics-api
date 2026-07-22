@@ -1,6 +1,29 @@
 from uuid import UUID
 
 
+class EmailAlreadyRegisteredError(ValueError):
+    def __init__(self, email: str) -> None:
+        super().__init__(f"email {email!r} is already registered")
+
+
+class AuthenticationError(PermissionError):
+    """Base error for failures that share one safe HTTP response."""
+
+
+class InvalidCredentialsError(AuthenticationError):
+    def __init__(self) -> None:
+        super().__init__("authentication failed")
+
+
+class InvalidAccessTokenError(AuthenticationError):
+    def __init__(self) -> None:
+        super().__init__("authentication failed")
+
+
+class InsightGenerationError(RuntimeError):
+    """Raised when an optional external insight generator cannot return safe output."""
+
+
 class PortfolioNotFoundError(LookupError):
     def __init__(self, portfolio_id: UUID) -> None:
         super().__init__(f"portfolio {portfolio_id} was not found")

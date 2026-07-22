@@ -5,17 +5,25 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from portfolio_analytics_api.api.auth_routes import build_auth_router
 from portfolio_analytics_api.api.routes import build_portfolio_router
 from portfolio_analytics_api.application import (
+    AccessTokenService,
+    AuthenticationError,
+    AuthenticationService,
+    EmailAlreadyRegisteredError,
+    InsightGenerator,
     MarketDataInvalidResponseError,
     MarketDataNotFoundError,
     MarketDataProvider,
     MarketDataRateLimitError,
     MarketDataTimeoutError,
     MarketDataUnavailableError,
+    PasswordHasher,
     PortfolioAlreadyExistsError,
     PortfolioAnalyticsService,
     PortfolioAnalyticsUnavailableError,
+    PortfolioInsightService,
     PortfolioNotFoundError,
     PortfolioService,
     TransactionIdempotencyConflictError,
@@ -33,6 +41,9 @@ def create_app(
     unit_of_work_factory: UnitOfWorkFactory,
     market_data_provider: MarketDataProvider,
     methodology: AnalyticsMethodology,
+    password_hasher: PasswordHasher,
+    access_token_service: AccessTokenService,
+    insight_generator: InsightGenerator | None = None,
     shutdown_callback: Callable[[], Awaitable[None]] | None = None,
 ) -> FastAPI:
     @asynccontextmanager
@@ -42,6 +53,11 @@ def create_app(
             await shutdown_callback()
 
     app = FastAPI(title="Portfolio Analytics API", lifespan=lifespan)
+    authentication_service = AuthenticationService(
+        unit_of_work_factory=unit_of_work_factory,
+        password_hasher=password_hasher,
+        access_token_service=access_token_service,
+    )
     portfolio_service = PortfolioService(unit_of_work_factory)
     transaction_service = TransactionService(unit_of_work_factory)
     analytics_service = PortfolioAnalyticsService(
@@ -49,13 +65,42 @@ def create_app(
         market_data_provider=market_data_provider,
         methodology=methodology,
     )
+    insight_service = PortfolioInsightService(
+        analytics_service=analytics_service,
+        unit_of_work_factory=unit_of_work_factory,
+        insight_generator=insight_generator,
+    )
     app.include_router(
         build_portfolio_router(
+            authentication_service,
             portfolio_service,
             transaction_service,
             analytics_service,
+            insight_service,
         )
     )
+    app.include_router(build_auth_router(authentication_service))
+
+    @app.exception_handler(AuthenticationError)
+    async def authentication_error_handler(
+        _request: Request, error: AuthenticationError
+    ) -> JSONResponse:
+        return _error_response(
+            status.HTTP_401_UNAUTHORIZED,
+            "authentication_failed",
+            str(error),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    @app.exception_handler(EmailAlreadyRegisteredError)
+    async def email_already_registered_handler(
+        _request: Request, error: EmailAlreadyRegisteredError
+    ) -> JSONResponse:
+        return _error_response(
+            status.HTTP_409_CONFLICT,
+            "email_already_registered",
+            str(error),
+        )
 
     @app.exception_handler(PortfolioNotFoundError)
     async def portfolio_not_found_handler(
@@ -182,8 +227,14 @@ def create_app(
     return app
 
 
-def _error_response(status_code: int, code: str, message: str) -> JSONResponse:
+def _error_response(
+    status_code: int,
+    code: str,
+    message: str,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
         content={"error": {"code": code, "message": message}},
+        headers=headers,
     )

@@ -5,8 +5,9 @@ A FastAPI backend for deterministic and explainable portfolio analytics.
 The current vertical slice persists portfolios and idempotent transaction
 ledgers in PostgreSQL, validates holdings rules, and returns deterministic
 multi-asset portfolio analytics using adjusted-close history from yfinance.
-Unit and integration tests continue to use fixed fake market data and do not
-require network access.
+It can optionally enrich the deterministic risk summary through DeepSeek while
+preserving a rule-based fallback. Unit and integration tests use fixed fake
+market data and a Fake Insight Generator and do not require network access.
 
 ## Financial methodology
 
@@ -36,6 +37,7 @@ This installs the locked application and development dependencies from
 
 ```bash
 cp .env.example .env
+# Replace JWT_SECRET_KEY with at least 32 random characters before starting.
 make infra-up
 make db-upgrade
 make dev
@@ -57,6 +59,30 @@ Expected response:
 
 Interactive API documentation is available at
 <http://127.0.0.1:8000/docs>.
+
+## Authentication
+
+Register an account and exchange its credentials for a 30-minute JWT access
+token. Email addresses are stored in normalized lowercase form, passwords are
+stored only as Argon2 hashes, and authentication failures use one stable 401
+response without distinguishing an unknown email from a wrong password.
+
+```bash
+curl -X POST http://127.0.0.1:8000/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"investor@example.com","password":"replace-with-a-long-password"}'
+
+curl -X POST http://127.0.0.1:8000/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"investor@example.com","password":"replace-with-a-long-password"}'
+```
+
+Use the returned `access_token` as `<token>` below. `JWT_SECRET_KEY` is required
+at application startup and is read only from the
+environment (or a local ignored `.env` file). The repository contains no usable
+token-signing key. Every portfolio route requires the Bearer token, and the
+application service returns 404 when a user guesses another user's portfolio
+ID.
 
 ## Local infrastructure
 
@@ -92,6 +118,7 @@ Finance. Create a single-currency, potentially multi-asset portfolio:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/portfolios \
+  -H 'Authorization: Bearer <token>' \
   -H 'Content-Type: application/json' \
   -d '{
     "name": "Demo portfolio",
@@ -105,6 +132,7 @@ posting it twice:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/portfolios/<id>/transactions \
+  -H 'Authorization: Bearer <token>' \
   -H 'Content-Type: application/json' \
   -d '{
     "external_id": "demo-buy-001",
@@ -120,9 +148,10 @@ curl -X POST http://127.0.0.1:8000/portfolios/<id>/transactions \
 Retrieve the portfolio, ordered transaction ledger, or reproducible analytics:
 
 ```bash
-curl http://127.0.0.1:8000/portfolios/<id>
-curl http://127.0.0.1:8000/portfolios/<id>/transactions
-curl 'http://127.0.0.1:8000/portfolios/<id>/analytics?start_date=2026-01-02&end_date=2026-01-06'
+curl -H 'Authorization: Bearer <token>' http://127.0.0.1:8000/portfolios/<id>
+curl -H 'Authorization: Bearer <token>' http://127.0.0.1:8000/portfolios/<id>/transactions
+curl -H 'Authorization: Bearer <token>' \
+  'http://127.0.0.1:8000/portfolios/<id>/analytics?start_date=2026-01-02&end_date=2026-01-06'
 ```
 
 The response includes cash-flow-adjusted period simple return, annualized
@@ -131,6 +160,31 @@ balance, security weights, `as_of`, methodology, and a `stale` flag describing
 market-data freshness. Multiple traded symbols are valued together. Security
 weights use total portfolio value, including cash, as the denominator. Data
 survives application restarts.
+
+Generate the deterministic historical risk summary for the same date range:
+
+```bash
+curl -X POST -H 'Authorization: Bearer <token>' \
+  'http://127.0.0.1:8000/portfolios/<id>/insights?start_date=2026-01-02&end_date=2026-01-06'
+```
+
+The versioned rules describe volatility, drawdown, historical Sharpe ratio,
+latest single-security concentration, missing-data limitations, and stale data.
+They always determine the risk level and factors. With no `DEEPSEEK_API_KEY`,
+or if DeepSeek times out, errors, or fails strict response validation, the API
+returns those rules unchanged. With a key, DeepSeek `deepseek-v4-flash` may
+enrich only the narrative from the structured metrics and methodology. Add the
+key only to the ignored local `.env`; never commit it:
+
+```dotenv
+DEEPSEEK_API_KEY=<your-local-key>
+```
+
+Successful generated narratives are cached in Redis for 86,400 seconds by
+default. Every insight result is saved as an `AnalysisSnapshot` containing the
+actual generator/model, prompt or rule version, generation time, input metrics
+summary, and methodology. All paths retain the fixed informational-use and
+non-investment-advice disclaimer.
 
 Upstream rate limiting and availability failures return stable 503 errors when
 no stale fallback exists; provider timeouts return 504, malformed upstream data

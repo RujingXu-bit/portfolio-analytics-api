@@ -2,30 +2,46 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from portfolio_analytics_api.api.schemas import (
     CreatePortfolioRequest,
     ErrorResponse,
     PortfolioAnalyticsResponse,
+    PortfolioInsightResponse,
     PortfolioResponse,
     TransactionInput,
     TransactionResponse,
 )
 from portfolio_analytics_api.application import (
+    AuthenticationService,
+    InvalidAccessTokenError,
     NewTransaction,
     PortfolioAnalyticsService,
+    PortfolioInsightService,
     PortfolioService,
     TransactionService,
 )
+from portfolio_analytics_api.domain import User
 
 
 def build_portfolio_router(
+    authentication_service: AuthenticationService,
     portfolio_service: PortfolioService,
     transaction_service: TransactionService,
     analytics_service: PortfolioAnalyticsService,
+    insight_service: PortfolioInsightService,
 ) -> APIRouter:
     router = APIRouter(prefix="/portfolios", tags=["portfolios"])
+    bearer = HTTPBearer(auto_error=False)
+
+    async def current_user(
+        credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)],
+    ) -> User:
+        if credentials is None or credentials.scheme.lower() != "bearer":
+            raise InvalidAccessTokenError()
+        return await authentication_service.authenticate(credentials.credentials)
 
     @router.post(
         "",
@@ -33,8 +49,12 @@ def build_portfolio_router(
         status_code=status.HTTP_201_CREATED,
         responses={422: {"model": ErrorResponse}},
     )
-    async def create_portfolio(request: CreatePortfolioRequest) -> PortfolioResponse:
+    async def create_portfolio(
+        request: CreatePortfolioRequest,
+        user: Annotated[User, Depends(current_user)],
+    ) -> PortfolioResponse:
         portfolio = await portfolio_service.create(
+            owner_id=user.id,
             name=request.name,
             base_currency=request.base_currency,
         )
@@ -45,8 +65,11 @@ def build_portfolio_router(
         response_model=PortfolioResponse,
         responses={404: {"model": ErrorResponse}},
     )
-    async def get_portfolio(portfolio_id: UUID) -> PortfolioResponse:
-        portfolio = await portfolio_service.get(portfolio_id)
+    async def get_portfolio(
+        portfolio_id: UUID,
+        user: Annotated[User, Depends(current_user)],
+    ) -> PortfolioResponse:
+        portfolio = await portfolio_service.get(user.id, portfolio_id)
         return PortfolioResponse.model_validate(portfolio)
 
     @router.post(
@@ -63,8 +86,10 @@ def build_portfolio_router(
         portfolio_id: UUID,
         request: TransactionInput,
         response: Response,
+        user: Annotated[User, Depends(current_user)],
     ) -> TransactionResponse:
         result = await transaction_service.create(
+            user.id,
             portfolio_id,
             NewTransaction(
                 external_id=request.external_id,
@@ -86,8 +111,11 @@ def build_portfolio_router(
         response_model=list[TransactionResponse],
         responses={404: {"model": ErrorResponse}},
     )
-    async def list_transactions(portfolio_id: UUID) -> list[TransactionResponse]:
-        transactions = await transaction_service.list(portfolio_id)
+    async def list_transactions(
+        portfolio_id: UUID,
+        user: Annotated[User, Depends(current_user)],
+    ) -> list[TransactionResponse]:
+        transactions = await transaction_service.list(user.id, portfolio_id)
         return [
             TransactionResponse.model_validate(transaction)
             for transaction in transactions
@@ -102,12 +130,33 @@ def build_portfolio_router(
         portfolio_id: UUID,
         start_date: Annotated[date, Query(description="Inclusive first date")],
         end_date: Annotated[date, Query(description="Inclusive last date")],
+        user: Annotated[User, Depends(current_user)],
     ) -> PortfolioAnalyticsResponse:
         analytics = await analytics_service.analyze(
+            owner_id=user.id,
             portfolio_id=portfolio_id,
             start_date=start_date,
             end_date=end_date,
         )
         return PortfolioAnalyticsResponse.model_validate(analytics)
+
+    @router.post(
+        "/{portfolio_id}/insights",
+        response_model=PortfolioInsightResponse,
+        responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+    )
+    async def create_portfolio_insight(
+        portfolio_id: UUID,
+        start_date: Annotated[date, Query(description="Inclusive first date")],
+        end_date: Annotated[date, Query(description="Inclusive last date")],
+        user: Annotated[User, Depends(current_user)],
+    ) -> PortfolioInsightResponse:
+        insight = await insight_service.generate(
+            owner_id=user.id,
+            portfolio_id=portfolio_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        return PortfolioInsightResponse.model_validate(insight)
 
     return router

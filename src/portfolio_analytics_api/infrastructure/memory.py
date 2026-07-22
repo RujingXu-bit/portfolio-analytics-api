@@ -5,17 +5,55 @@ from typing import Self
 from uuid import UUID
 
 from portfolio_analytics_api.application import (
+    EmailAlreadyRegisteredError,
     MarketDataNotFoundError,
     MarketDataResult,
     PortfolioAlreadyExistsError,
 )
-from portfolio_analytics_api.domain import Portfolio, PriceBar, Transaction
+from portfolio_analytics_api.domain import (
+    AnalysisSnapshot,
+    GeneratedInsight,
+    InsightInput,
+    Portfolio,
+    PriceBar,
+    Transaction,
+    User,
+)
 
 
 class InMemoryStore:
     def __init__(self) -> None:
+        self.users: dict[UUID, User] = {}
+        self.analysis_snapshots: list[AnalysisSnapshot] = []
         self.portfolios: dict[UUID, Portfolio] = {}
         self.transactions: list[Transaction] = []
+
+
+class InMemoryUserRepository:
+    def __init__(self, store: InMemoryStore) -> None:
+        self._store = store
+
+    async def add(self, user: User) -> None:
+        if any(existing.email == user.email for existing in self._store.users.values()):
+            raise EmailAlreadyRegisteredError(user.email)
+        self._store.users[user.id] = user
+
+    async def get(self, user_id: UUID) -> User | None:
+        return self._store.users.get(user_id)
+
+    async def get_by_email(self, email: str) -> User | None:
+        return next(
+            (user for user in self._store.users.values() if user.email == email),
+            None,
+        )
+
+
+class InMemoryAnalysisSnapshotRepository:
+    def __init__(self, store: InMemoryStore) -> None:
+        self._store = store
+
+    async def add(self, snapshot: AnalysisSnapshot) -> None:
+        self._store.analysis_snapshots.append(snapshot)
 
 
 class InMemoryPortfolioRepository:
@@ -74,6 +112,8 @@ class InMemoryTransactionRepository:
 
 class InMemoryUnitOfWork:
     def __init__(self, store: InMemoryStore) -> None:
+        self.users = InMemoryUserRepository(store)
+        self.analysis_snapshots = InMemoryAnalysisSnapshotRepository(store)
         self.portfolios = InMemoryPortfolioRepository(store)
         self.transactions = InMemoryTransactionRepository(store)
 
@@ -126,3 +166,37 @@ class FakeMarketDataProvider:
                 )
             )
         )
+
+
+class FakeInsightGenerator:
+    def __init__(
+        self,
+        result: GeneratedInsight | Exception,
+        *,
+        generator_name: str = "fake",
+        model_name: str = "fake-model",
+        prompt_version: str = "fake-prompt-v1",
+    ) -> None:
+        self._result = result
+        self._generator_name = generator_name
+        self._model_name = model_name
+        self._prompt_version = prompt_version
+        self.inputs: list[InsightInput] = []
+
+    @property
+    def generator_name(self) -> str:
+        return self._generator_name
+
+    @property
+    def model_name(self) -> str:
+        return self._model_name
+
+    @property
+    def prompt_version(self) -> str:
+        return self._prompt_version
+
+    async def generate(self, insight_input: InsightInput) -> GeneratedInsight:
+        self.inputs.append(insight_input)
+        if isinstance(self._result, Exception):
+            raise self._result
+        return self._result
