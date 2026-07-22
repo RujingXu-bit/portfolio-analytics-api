@@ -3,15 +3,21 @@ from portfolio_analytics_api.application.errors import (
     PortfolioAlreadyExistsError,
     PortfolioAnalyticsUnavailableError,
     PortfolioNotFoundError,
+    TransactionIdempotencyConflictError,
 )
 from portfolio_analytics_api.application.ports import (
     MarketDataProvider,
     PortfolioRepository,
+    TransactionRepository,
+    UnitOfWork,
+    UnitOfWorkFactory,
 )
 from portfolio_analytics_api.application.services import (
     NewTransaction,
     PortfolioAnalyticsService,
     PortfolioService,
+    TransactionCreation,
+    TransactionService,
 )
 
 __all__ = [
@@ -24,4 +30,10 @@ __all__ = [
     "PortfolioNotFoundError",
     "PortfolioRepository",
     "PortfolioService",
+    "TransactionCreation",
+    "TransactionIdempotencyConflictError",
+    "TransactionRepository",
+    "TransactionService",
+    "UnitOfWork",
+    "UnitOfWorkFactory",
 ]

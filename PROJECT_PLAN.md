@@ -12,13 +12,13 @@
 
 - 基准周期：5周。
 - 工作节奏：每周5天，每天4–5小时。
-- 总预算：100–125小时。
+- 总预算：106–133小时；W2 复核后补入必需的多资产估值任务。
 - 缓冲：计划内保留约5个工作日的集成和排错空间。
 
 ### 当前状态
 
-- 项目阶段：Week 1 里程碑审查已通过，准备进入 Week 2。
-- 当前优先任务：`W2.1`。
+- 项目阶段：Week 2 已完成，准备进入 Week 3。
+- 当前优先任务：`W3.1`。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
 
@@ -175,7 +175,7 @@ MarketDataProvider ---- Redis Cache
 
 ### Week 2：PostgreSQL与交易业务（20–25小时）
 
-#### [ ] W2.1 建立本地基础设施（3–4h）
+#### [x] W2.1 建立本地基础设施（3–4h）
 
 依赖：W1.R。
 
@@ -192,7 +192,7 @@ MarketDataProvider ---- Redis Cache
 - 服务健康状态可验证。
 - 仓库不包含真实凭据。
 
-#### [ ] W2.2 设计数据库模型与首次迁移（6–7h）
+#### [x] W2.2 设计数据库模型与首次迁移（6–7h）
 
 依赖：W2.1、W1.2。
 
@@ -209,7 +209,7 @@ MarketDataProvider ---- Redis Cache
 - ORM模型与migration一致。
 - 金额字段没有使用浮点数据库类型。
 
-#### [ ] W2.3 实现 Repository 与交易规则（6–8h）
+#### [x] W2.3 实现 Repository 与交易规则（6–8h）
 
 依赖：W2.2。
 
@@ -226,7 +226,7 @@ MarketDataProvider ---- Redis Cache
 - 重复 `external_id` 不会重复记账。
 - 测试不依赖执行顺序并可自动清理。
 
-#### [ ] W2.4 完成持久化交易垂直切片（5–6h）
+#### [x] W2.4 完成持久化交易垂直切片（5–6h）
 
 依赖：W2.3、W1.4。
 
@@ -247,7 +247,7 @@ MarketDataProvider ---- Redis Cache
   - `GET /portfolios/{id}/analytics`
 - 数据在应用重启后仍然存在。
 
-### Week 3：市场数据、Redis与韧性（20–25小时）
+### Week 3：市场数据、Redis与韧性（26–33小时）
 
 #### [ ] W3.1 实现第一个真实 Provider（6–8h）
 
@@ -315,6 +315,25 @@ MarketDataProvider ---- Redis Cache
 - 若实现，必须通过同一 Provider contract test。
 - Provider 切换通过配置完成，不修改领域或应用逻辑。
 
+#### [ ] W3.5 实现多资产组合估值（6–8h）
+
+依赖：W2.4、W3.3。
+
+工作内容：
+
+- 根据交易发生时间重放各标的持仓，构造无前视偏差的每日组合价值序列。
+- 明确 DEPOSIT、WITHDRAWAL、交易费用和外部现金流对收益率的处理口径。
+- 支持通过同一 MarketDataProvider 获取多个标的的日期对齐价格，并定义缺失价格行为。
+- 在 analytics methodology 中记录组合估值、现金流和日期对齐假设。
+- 输出可供 W4.3 使用的最新资产权重与集中度输入。
+
+验收标准：
+
+- 固定多资产和现金流 fixture 的组合价值、收益率与权重可人工复核。
+- 交易发生前的持仓不会进入历史估值，不使用未来价格或未来交易信息。
+- 单标的结果与现有 W2.4 口径保持兼容，缺失价格和无持仓场景有稳定错误。
+- 单元测试完全离线，不依赖真实 Provider 或系统当前时间。
+
 ### Week 4：认证、权限与AI摘要（20–25小时）
 
 #### [ ] W4.1 实现认证（6–8h）
@@ -348,7 +367,7 @@ MarketDataProvider ---- Redis Cache
 
 #### [ ] W4.3 实现确定性风险摘要（3–4h）
 
-依赖：W1.3、W2.4。
+依赖：W1.3、W2.4、W3.5。
 
 工作内容：
 
@@ -526,16 +545,27 @@ GET  /health
 
 ### 2026-07-22
 
-- [x] W1.R 完成 P2 整改后的独立复审，最终结论为 PASS；未启动任何 Week 2 实现。
-- P2 处置：Makefile 新增并成功运行 `make test-cov`；市场数据契约明确 `PriceBar.date` 是标的上市交易所时区下的交易会话日期，供应商时间戳须先转换至该时区再取日期，不允许直接截断 UTC 或使用主机时区。
-- 验证：`make check` 通过，Ruff 与格式检查无问题，mypy 检查 26 个源文件无问题，pytest 36 项通过且 branch coverage 为 100%；独立运行 `make test-cov` 再次通过 36 项测试且 branch coverage 为 100%；`uv lock --check` 通过。
-- 复审：W1.1–W1.4 验收证据继续有效，首次审查的两项 P2 均已关闭；领域依赖扫描和测试网络隔离复核通过，`git diff --check` 通过，不存在未解决的 P0、P1、P2 或 P3 问题。W1.R 门禁解除，下一步：执行 `W2.1 建立本地基础设施`。
+- [x] W2.4 完成持久化交易垂直切片：`POST /portfolios`、`GET /portfolios/{id}`、`POST/GET /portfolios/{id}/transactions` 和 `GET /portfolios/{id}/analytics` 均通过应用服务与请求级 Unit of Work 访问 PostgreSQL；路由不包含 SQL 或金融算法。
+- Portfolio 创建与交易创建已分离，Portfolio 保存单一 base currency；交易请求验证字段组合、时区和 Decimal 精度。首次交易创建返回 201，相同幂等重试返回原记录和 200，不同 payload 返回稳定 409；超卖返回稳定 422。应用启动不执行 migration，engine 在 lifespan 关闭。
+- Analytics 从持久化交易流水读取当前单标的 symbol，继续返回四项指标、`as_of` 与 methodology；多资产估值未在 W2 提前实现，已新增必需任务 W3.5，并将 W4.3 集中度摘要依赖改为 W3.5。
+- 验证：15 项离线 API 单元测试和 2 项持久化 API 集成测试通过；集成测试覆盖五个指定 endpoint、统一错误、幂等状态码，并在关闭首个 engine、创建新 app/engine 后读取相同 Portfolio、Transaction 和 analytics，证明数据不依赖进程内存。`make check` 通过，Ruff、format、mypy（40 个源文件）和 58 项单元测试通过；`make test-all` 共 64 项通过，综合 branch coverage 为 94%；`alembic check` 无新增升级操作；`uv lock --check` 与 `git diff --check` 通过。
+- Week 2（W2.1–W2.4）全部完成；下一步：执行 `W3.1 实现第一个真实 Provider`。
 
-- [ ] W1.R 完成首次 Week 1 里程碑审查，结论为 CONDITIONAL PASS；W1.1–W1.4 的原验收标准均有当前实现和测试证据支持，但该结论不视为里程碑通过。
-- 验证：全新临时环境执行 `make install` 成功；`make check` 通过，Ruff、format check、mypy 和 36 项单元测试通过，branch coverage 为 100%；`make test-cov` 失败，因为 Makefile 不存在该目标。
-- 审查：金融公式与文档口径一致，计划要求的主要边界均有直接测试；领域层未依赖 FastAPI、SQLAlchemy、Pandas、具体 Provider、网络、数据库或系统当前时间；单元测试仅使用 Fake Provider、内存 Repository 和 `httpx.ASGITransport`，未访问真实网络。
-- 未解决项：补充并通过 `make test-cov` 统一命令；明确市场时间戳归一化为 `PriceBar.date` 的时区规则。在 W1.R 复审得到 PASS 并勾选前，不得启动 W2。
-- 下一步：处理 W1.R 未解决项后重新运行里程碑审查。
+- [x] W2.3 完成 Portfolio/Transaction Repository 协议、SQLAlchemy Unit of Work、PostgreSQL adapters、纯领域交易校验和持仓重放；领域层不依赖 SQLAlchemy。
+- 交易写入锁定 Portfolio 行，在同一事务中检查 portfolio-scoped `external_id`、重放按 occurred_at/created_at/id 排序的流水、拒绝负持仓并写入；symbol 规范化为大写，带时区时间归一化为 UTC。相同幂等 payload 返回原交易，不同 payload 报冲突；W2 只派生证券持仓，不强制现金充足。
+- 验证：17 项聚焦 holdings/transaction service 单元测试通过；3 项 PostgreSQL Repository 集成测试覆盖 Decimal 精度、稳定顺序、串行与并发幂等、并发超卖和自动清理；迁移与 Repository 集成测试共 4 项通过；`make check` 通过，mypy 检查 39 个源文件无问题，53 项单元测试通过；`make test-all` 共 57 项通过，综合 branch coverage 为 96%；`uv lock --check` 与 `git diff --check` 通过。
+- 下一步：执行 `W2.4 完成持久化交易垂直切片`。
+
+- [x] W2.2 完成 SQLAlchemy 2.x/asyncpg 异步数据库基线、Pydantic Settings、User/Portfolio/Asset/Transaction/AnalysisSnapshot ORM 模型和首次 Alembic migration；应用启动不会隐式执行 migration。
+- 数据口径：价格、现金金额和费用使用 `NUMERIC(20,8)`，数量使用 `NUMERIC(28,12)`；Portfolio owner 外键在认证接入前允许为空；Portfolio 保存三字符单一 base currency；交易幂等唯一约束限定在单个 Portfolio 内。关键选择已记录于 `docs/decisions.md`。
+- 验证：隔离 `_test` 数据库从空 public schema 成功执行 `alembic upgrade head`；`alembic check` 报告无新增升级操作；集成测试核对 5 张业务表、NUMERIC 精度、交易 CHECK/唯一约束和 owner 外键；开发数据库成功升级至 `20260722_0001`；`make check` 通过，mypy 检查 32 个源文件无问题，36 项单元测试通过；`make test-integration` 1 项通过；`uv lock --check` 与 `git diff --check` 通过。
+- 迁移验证首次运行发现 SQLAlchemy 异步运行时缺少 greenlet，依赖声明已修正为 `sqlalchemy[asyncio]` 并重新锁定，随后空库迁移测试通过。
+- 下一步：执行 `W2.3 实现 Repository 与交易规则`。
+
+- [x] W2.1 完成 PostgreSQL 16、Redis 7 和隔离测试 PostgreSQL profile；开发 PostgreSQL 使用命名卷，测试实例使用临时存储，Compose 服务均配置健康检查。
+- Makefile 新增 `infra-up`、`infra-down`、`infra-logs`、`infra-check`、`infra-test-up` 与 `infra-test-down`；`.env.example` 明确区分开发、测试数据库和 Redis 的本地无秘密配置。因本机 5432 已被其他服务占用，项目宿主端口使用 55432，测试库使用 55433，容器内仍使用 PostgreSQL 标准端口 5432。
+- 验证：`docker compose config --quiet` 通过；开发 PostgreSQL 与 Redis 分别通过 `pg_isready` 和 `PING` 健康检查；测试 PostgreSQL 启动为 healthy；`make infra-down` 后 `portfolio-analytics_postgres-data` 卷仍保留；`make check` 通过，Ruff、format、mypy 和 36 项单元测试通过，branch coverage 为 100%；`git diff --check` 通过。
+- 下一步：执行 `W2.2 设计数据库模型与首次迁移`。
 
 - [x] W1.4 完成 `MarketDataProvider` 与 `PortfolioRepository` 协议、`FakeMarketDataProvider`、内存 Repository、Portfolio 创建应用服务和 analytics 应用服务；临时 API 提供 `POST /portfolios` 与 `GET /portfolios/{portfolio_id}/analytics`。
 - 固定单标的交易和 adjusted-close 价格可通过 API 返回区间简单收益率、年化波动率、最大回撤、Sharpe Ratio、`as_of` 与完整 methodology；路由只负责 HTTP schema 和应用服务调用，单标的临时限制已记录于 README、methodology 与架构文档。

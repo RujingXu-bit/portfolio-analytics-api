@@ -1,9 +1,16 @@
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from portfolio_analytics_api.domain import PriceBasis, ReturnType, TransactionType
 
@@ -11,27 +18,85 @@ NonEmptyString = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=1, max_length=100),
 ]
+ExternalId = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=100),
+]
+Symbol = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=32),
+]
+CurrencyCode = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        to_upper=True,
+        min_length=3,
+        max_length=3,
+        pattern=r"^[A-Z]{3}$",
+    ),
+]
 
 
 class TransactionInput(BaseModel):
-    external_id: NonEmptyString
+    external_id: ExternalId
     transaction_type: TransactionType
     occurred_at: datetime
-    symbol: str | None = None
-    quantity: Decimal | None = Field(default=None, gt=0)
-    unit_price: Decimal | None = Field(default=None, gt=0)
-    cash_amount: Decimal | None = Field(default=None, gt=0)
-    fees: Decimal = Field(default=Decimal("0"), ge=0)
+    symbol: Symbol | None = None
+    quantity: Decimal | None = Field(
+        default=None, gt=0, max_digits=28, decimal_places=12
+    )
+    unit_price: Decimal | None = Field(
+        default=None, gt=0, max_digits=20, decimal_places=8
+    )
+    cash_amount: Decimal | None = Field(
+        default=None, gt=0, max_digits=20, decimal_places=8
+    )
+    fees: Decimal = Field(default=Decimal("0"), ge=0, max_digits=20, decimal_places=8)
+
+    @field_validator("occurred_at")
+    @classmethod
+    def occurred_at_requires_timezone(cls, value: datetime) -> datetime:
+        if value.tzinfo is None:
+            raise ValueError("occurred_at must include a timezone")
+        return value
+
+    @model_validator(mode="after")
+    def payload_matches_transaction_type(self) -> Self:
+        if self.transaction_type in {TransactionType.BUY, TransactionType.SELL}:
+            if self.symbol is None or self.quantity is None or self.unit_price is None:
+                raise ValueError(
+                    "BUY and SELL require symbol, quantity, and unit_price"
+                )
+            if self.cash_amount is not None:
+                raise ValueError("BUY and SELL must not include cash_amount")
+        else:
+            if self.cash_amount is None:
+                raise ValueError("DEPOSIT and WITHDRAWAL require cash_amount")
+            if any(
+                value is not None
+                for value in (self.symbol, self.quantity, self.unit_price)
+            ):
+                raise ValueError(
+                    "DEPOSIT and WITHDRAWAL only accept cash_amount and fees"
+                )
+        return self
 
 
 class CreatePortfolioRequest(BaseModel):
     name: NonEmptyString
-    transactions: tuple[TransactionInput, ...] = ()
+    base_currency: CurrencyCode = "USD"
+
+    @field_validator("base_currency", mode="before")
+    @classmethod
+    def normalize_base_currency(cls, value: object) -> object:
+        return value.strip().upper() if isinstance(value, str) else value
 
 
 class TransactionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    id: UUID
     portfolio_id: UUID
     external_id: str
     transaction_type: TransactionType
@@ -48,7 +113,7 @@ class PortfolioResponse(BaseModel):
 
     id: UUID
     name: str
-    transactions: tuple[TransactionResponse, ...]
+    base_currency: str
 
 
 class MethodologyResponse(BaseModel):

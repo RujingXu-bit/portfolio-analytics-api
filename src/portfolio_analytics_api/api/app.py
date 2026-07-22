@@ -1,3 +1,6 @@
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -10,25 +13,45 @@ from portfolio_analytics_api.application import (
     PortfolioAnalyticsService,
     PortfolioAnalyticsUnavailableError,
     PortfolioNotFoundError,
-    PortfolioRepository,
     PortfolioService,
+    TransactionIdempotencyConflictError,
+    TransactionService,
+    UnitOfWorkFactory,
 )
-from portfolio_analytics_api.domain import AnalyticsMethodology, InvalidPriceSeriesError
+from portfolio_analytics_api.domain import (
+    AnalyticsMethodology,
+    InvalidPriceSeriesError,
+    InvalidTransactionError,
+)
 
 
 def create_app(
-    portfolio_repository: PortfolioRepository,
+    unit_of_work_factory: UnitOfWorkFactory,
     market_data_provider: MarketDataProvider,
     methodology: AnalyticsMethodology,
+    shutdown_callback: Callable[[], Awaitable[None]] | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="Portfolio Analytics API")
-    portfolio_service = PortfolioService(portfolio_repository)
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        yield
+        if shutdown_callback is not None:
+            await shutdown_callback()
+
+    app = FastAPI(title="Portfolio Analytics API", lifespan=lifespan)
+    portfolio_service = PortfolioService(unit_of_work_factory)
+    transaction_service = TransactionService(unit_of_work_factory)
     analytics_service = PortfolioAnalyticsService(
-        repository=portfolio_repository,
+        unit_of_work_factory=unit_of_work_factory,
         market_data_provider=market_data_provider,
         methodology=methodology,
     )
-    app.include_router(build_portfolio_router(portfolio_service, analytics_service))
+    app.include_router(
+        build_portfolio_router(
+            portfolio_service,
+            transaction_service,
+            analytics_service,
+        )
+    )
 
     @app.exception_handler(PortfolioNotFoundError)
     async def portfolio_not_found_handler(
@@ -65,6 +88,26 @@ def create_app(
         return _error_response(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             "analytics_unavailable",
+            str(error),
+        )
+
+    @app.exception_handler(TransactionIdempotencyConflictError)
+    async def transaction_idempotency_conflict_handler(
+        _request: Request, error: TransactionIdempotencyConflictError
+    ) -> JSONResponse:
+        return _error_response(
+            status.HTTP_409_CONFLICT,
+            "transaction_idempotency_conflict",
+            str(error),
+        )
+
+    @app.exception_handler(InvalidTransactionError)
+    async def invalid_transaction_handler(
+        _request: Request, error: InvalidTransactionError
+    ) -> JSONResponse:
+        return _error_response(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            "invalid_transaction",
             str(error),
         )
 

@@ -1,15 +1,16 @@
 # Architecture
 
-The application is a modular monolith. The Week 1 in-memory vertical slice
-keeps framework, use-case, domain, and adapter responsibilities separate so
-later tasks can replace infrastructure without changing financial algorithms.
+The application is a modular monolith. Framework, use-case, domain, and adapter
+responsibilities remain separate so infrastructure can change without changing
+financial algorithms.
 
 ## Current request path
 
 ```text
 FastAPI route
-    -> PortfolioService / PortfolioAnalyticsService
-        -> PortfolioRepository protocol -> InMemoryPortfolioRepository
+    -> PortfolioService / TransactionService / PortfolioAnalyticsService
+        -> UnitOfWork -> PortfolioRepository / TransactionRepository
+                         -> PostgreSQL (SQLAlchemy + asyncpg)
         -> MarketDataProvider protocol  -> FakeMarketDataProvider
         -> deterministic domain analytics functions
 ```
@@ -17,32 +18,39 @@ FastAPI route
 The API layer validates and serializes HTTP data. It does not calculate
 financial metrics or access repository storage directly.
 
-The application layer owns use-case orchestration. Portfolio creation maps an
-application transaction input into domain objects. Analytics loads a portfolio,
-identifies the temporary single traded symbol, requests a date-bounded price
-series, and composes the four domain metrics into `PortfolioAnalytics`.
+The application layer owns use-case orchestration and transaction boundaries.
+Portfolio and transaction writes use a fresh unit of work. Analytics loads the
+persistent ordered transaction ledger, identifies the current single traded
+symbol, requests a date-bounded price series, and composes the four domain
+metrics into `PortfolioAnalytics`.
 
 The domain layer contains immutable values and deterministic financial
 functions. It has no FastAPI, database, Pandas, provider, network, system clock,
 or infrastructure dependency.
 
-The infrastructure layer currently supplies only offline adapters. The fake
-market data provider returns the project's `PriceBar` type and the in-memory
-repository implements the application repository protocol. PostgreSQL and a
-real market data provider are deferred to their explicit Week 2 and Week 3
-tasks.
+The infrastructure layer supplies PostgreSQL repositories and offline adapters
+used by unit tests. The fake market data provider returns the project's
+`PriceBar` type. A real market data provider remains W3.1 work.
 
-The market data provider boundary also owns timestamp normalization. It maps
-each observation to the trading-session date in the instrument's listing
-exchange timezone before constructing `PriceBar`; application and domain code
-never infer a date from a vendor timestamp or the host timezone. The complete
-normalization rule is recorded in `docs/methodology.md` and will apply to the
-real provider introduced in W3.1.
+Week 2 persistence uses SQLAlchemy 2.x with asyncpg. ORM records and Alembic
+metadata live only in the infrastructure layer; domain values remain framework
+independent. Database sessions are created at a use-case boundary, and schema
+migrations are explicit deployment commands rather than application-startup
+side effects. Redis is available in local infrastructure but is not connected
+to application code until W3.2.
 
-## Temporary scope
+PostgreSQL access is organized behind Portfolio and Transaction repository
+protocols and a small unit-of-work boundary. Creating a transaction locks its
+Portfolio row, checks the portfolio-scoped idempotency key, replays the ordered
+ledger, and commits the new row atomically. The domain replay order is
+`occurred_at`, ingestion `created_at`, then transaction ID. BUY and SELL affect
+security positions; DEPOSIT and WITHDRAWAL are recorded but W2 does not enforce
+a cash balance.
 
-The W1.4 API supports `POST /portfolios` and
-`GET /portfolios/{portfolio_id}/analytics` with an inclusive date range. Data
-does not survive process restarts. Analytics currently accepts exactly one
-symbol represented by a BUY or SELL transaction; multi-asset holdings and
-cash-flow-aware valuation are not implemented in this slice.
+## Current scope
+
+The W2.4 API persists Portfolio and Transaction resources and exposes creation,
+lookup, ordered transaction listing, and analytics. Data survives process and
+engine recreation. Analytics accepts exactly one symbol represented by BUY or
+SELL transactions; multi-asset and cash-flow-aware valuation are not part of
+this slice. Authentication and enforced non-null ownership remain W4 work.
