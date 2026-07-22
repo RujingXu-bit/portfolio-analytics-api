@@ -17,11 +17,10 @@
 
 ### 当前状态
 
-- 项目阶段：后端 `v1.1.0` 与公开演示已发布，Post-V1 P2 增强已实现；
-  `R2.1` 的 Twelve Data 截断整改与本地门禁已完成，待合并后最终复审。
-- 当前优先任务：将 `R2.1` 整改合并到 `origin/main`，再从同步、干净基线复审。
-- 当前阻塞：最终复审基线尚未包含本次整改；复审 PASS 前不得发布包含 E2.x 的
-  正式后端版本。
+- 项目阶段：后端 `v1.1.0` 与公开演示已发布，Post-V1 P2 增强及 `R2.1`
+  最终审查均已完成。
+- 当前优先任务：执行 `R2.2`，正式发布包含 E2.x 的后端 `v1.2.0`。
+- 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
 - Post-V1 后端当前正式版：`v1.1.0`；E2.x 变更记录于 Unreleased；独立 Web
   前端当前正式版：`v1.0.0`。
@@ -720,7 +719,7 @@ Portfolio lock、Decimal 精度、领域/持仓验证和数据库唯一约束；
 幂等冲突均可解释，完全重试返回原数据库 transaction ID。单元、PostgreSQL 集成、
 OpenAPI、迁移漂移、锁文件及生产镜像门禁全部通过。
 
-#### [ ] R2.1 Post-V1/P2 最终审查（2–3h）
+#### [x] R2.1 Post-V1/P2 最终审查（2–3h）
 
 依赖：E2.1、E2.2。
 
@@ -733,6 +732,21 @@ CONDITIONAL PASS 或 FAIL 结论。
 范围静默返回不完整价格序列，E2.2 的所有权、预览只读、Decimal、逐行提交和
 幂等边界由离线、PostgreSQL 与公网证据共同支持；全部门禁通过且不存在未解决的
 P0/P1 问题。只有最终结论为 PASS 才能勾选本任务并开始正式版本化 E2.x。
+
+#### [ ] R2.2 发布后端 v1.2.0（3–5h）
+
+依赖：R2.1。
+
+工作内容：从最新、干净的 `origin/main` 将 Python 包和 FastAPI OpenAPI 版本升级
+为 `1.2.0`；把 E2.1、E2.2 与 R2.1 修复从 changelog 的 Unreleased 发布为
+`1.2.0`，同步 README 与项目状态；运行完整静态、单元、集成、迁移、锁文件、
+构建、真实 Provider contract 和生产镜像门禁；合并发布提交后创建 annotated
+`v1.2.0` tag 与非 prerelease GitHub Release。
+
+验收：发布提交来自通过 R2.1 的最新 `origin/main`；wheel、sdist 与 OpenAPI 均
+报告 `1.2.0`；全部门禁和发布提交的 GitHub Actions 通过；annotated tag 与 GitHub
+Release 指向同一个已验证提交，Release 非 draft、非 prerelease，且发布说明准确
+描述第二 Provider、CSV 导入和长窗口 fail-closed 限制。
 
 ### Post-V1 范围边界
 
@@ -758,6 +772,20 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] R2.1 最终复审结论为 **PASS**。Review baseline:
+  `main@2cf07bd27e928d30065ebd40aee8541d35397d26`；
+  `HEAD == origin/main: yes`；`Worktree clean: yes`。PR #29 已合并唯一 P1 整改，
+  Twelve Data 短窗口真实 contract 正常返回，长窗口真实 contract 在 5,000 点
+  上限稳定 fail closed；未发现新的 P0、P1、P2 或 P3 问题。
+- 最终复审验证：`make check` 通过 Ruff、format、严格 mypy（95 个源文件）和
+  223 项单元测试，branch coverage 90%；`make test-all` 最终通过 239 项单元/集成
+  测试，branch coverage 94%；首次完整运行仅因 2 秒 Redis 固定窗口测试跨边界而
+  观察到 24/30 允许，聚焦重跑和完整重跑均通过，不属于实现回归。`make db-check`
+  无迁移漂移，`uv lock --check`、`uv build`、`git diff --check` 和
+  `make image-smoke` 通过；真实 Provider contract 3 项通过，DeepSeek 未显式启用
+  而按设计跳过。合并提交 GitHub Actions run `29950282879` 成功。R2.1 门禁解除，
+  下一步：执行 `R2.2` 发布后端 `v1.2.0`。
 
 - [x] R2.1 的唯一 P1 已完成整改。Twelve Data 请求现在显式设置
   `outputsize=5000`；响应达到 5,000 条时以稳定
