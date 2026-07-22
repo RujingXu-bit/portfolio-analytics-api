@@ -16,6 +16,7 @@ from portfolio_analytics_api.application import (
 from portfolio_analytics_api.domain import PriceBar
 
 DEFAULT_BASE_URL = "https://api.twelvedata.com"
+MAX_OUTPUT_SIZE = 5000
 
 
 class TwelveDataMarketDataProvider:
@@ -60,6 +61,7 @@ class TwelveDataMarketDataProvider:
             "start_date": start_date.isoformat(),
             "end_date": end_date.isoformat(),
             "adjust": "all",
+            "outputsize": str(MAX_OUTPUT_SIZE),
             "apikey": self._api_key,
         }
         response = await self._request(params)
@@ -128,6 +130,10 @@ def _normalize_payload(
     values = payload.get("values")
     if not isinstance(values, list):
         raise MarketDataInvalidResponseError("price values are missing")
+    if len(values) >= MAX_OUTPUT_SIZE:
+        raise MarketDataInvalidResponseError(
+            "provider response may be truncated at the 5000-point limit"
+        )
 
     bars: list[PriceBar] = []
     seen_dates: set[date] = set()

@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 import httpx
@@ -68,6 +68,7 @@ async def test_provider_requests_total_return_adjustment_and_normalizes_rows() -
     assert request.url.params["start_date"] == "2025-01-02"
     assert request.url.params["end_date"] == "2025-01-06"
     assert request.url.params["adjust"] == "all"
+    assert request.url.params["outputsize"] == "5000"
     assert request.url.params["apikey"] == "secret-key"
     assert [bar.date for bar in result.price_bars] == [
         date(2025, 1, 2),
@@ -91,6 +92,40 @@ async def test_provider_filters_rows_outside_requested_range() -> None:
     )
 
     assert all(bar.date >= date(2025, 1, 2) for bar in result.price_bars)
+
+
+@pytest.mark.anyio
+async def test_provider_rejects_a_long_window_truncated_at_output_limit() -> None:
+    end_date = date(2026, 1, 1)
+    values = [
+        {
+            "datetime": (end_date - timedelta(days=offset)).isoformat(),
+            "close": "100",
+        }
+        for offset in range(5000)
+    ]
+    payload = {
+        "meta": {"exchange_timezone": "America/New_York"},
+        "values": values,
+        "status": "ok",
+    }
+
+    async with httpx.AsyncClient(
+        base_url="https://api.twelvedata.test",
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, json=payload, request=request)
+        ),
+    ) as client:
+        provider = TwelveDataMarketDataProvider(api_key="secret-key", client=client)
+        with pytest.raises(
+            MarketDataInvalidResponseError,
+            match="truncated at the 5000-point limit",
+        ):
+            await provider.get_price_bars(
+                "AAPL",
+                date(2000, 1, 1),
+                end_date,
+            )
 
 
 @pytest.mark.anyio

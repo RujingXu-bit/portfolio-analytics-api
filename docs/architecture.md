@@ -107,9 +107,11 @@ returns only the project's `PriceBar` type. The yfinance adapter runs its
 blocking SDK call in a worker thread, explicitly requests unadjusted columns so
 it can select `Adj Close`, and normalizes the exchange-local session date. The
 Twelve Data adapter performs async HTTPS, requests `interval=1day` with
-`adjust=all`, preserves the provider's exchange-local session date, and maps
-only validated close values. Pandas, HTTP responses, and vendor payloads never
-leave the infrastructure layer.
+`adjust=all` and `outputsize=5000`, preserves the provider's exchange-local
+session date, and maps only validated close values. Responses that reach the
+5,000-point provider limit fail closed as potentially truncated; incomplete
+history therefore cannot reach analytics. Pandas, HTTP responses, and vendor
+payloads never leave the infrastructure layer.
 The observation decorator inside the retry boundary emits one latency and
 outcome event for every actual provider attempt. Cache hits therefore emit a
 cache event without pretending that an upstream call occurred; retryable and
