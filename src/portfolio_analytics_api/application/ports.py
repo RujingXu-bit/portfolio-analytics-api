@@ -38,6 +38,15 @@ class PortfolioRepository(Protocol):
 
     async def get_for_update(self, portfolio_id: UUID) -> Portfolio | None: ...
 
+    async def list_for_owner(
+        self,
+        owner_id: UUID,
+        limit: int,
+        offset: int,
+    ) -> tuple[Portfolio, ...]: ...
+
+    async def count_for_owner(self, owner_id: UUID) -> int: ...
+
 
 class TransactionRepository(Protocol):
     async def add(self, transaction: Transaction) -> None: ...
@@ -89,6 +98,15 @@ class InsightGenerator(Protocol):
 
 class AnalysisSnapshotRepository(Protocol):
     async def add(self, snapshot: AnalysisSnapshot) -> None: ...
+
+    async def list_for_portfolio(
+        self,
+        portfolio_id: UUID,
+        limit: int,
+        offset: int,
+    ) -> tuple[AnalysisSnapshot, ...]: ...
+
+    async def count_for_portfolio(self, portfolio_id: UUID) -> int: ...
 
 
 class UnitOfWork(Protocol):

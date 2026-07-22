@@ -1,6 +1,6 @@
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +42,34 @@ class PostgresAnalysisSnapshotRepository:
             )
         )
         await self._session.flush()
+
+    async def list_for_portfolio(
+        self,
+        portfolio_id: UUID,
+        limit: int,
+        offset: int,
+    ) -> tuple[AnalysisSnapshot, ...]:
+        records = (
+            await self._session.scalars(
+                select(AnalysisSnapshotRecord)
+                .where(AnalysisSnapshotRecord.portfolio_id == portfolio_id)
+                .order_by(
+                    AnalysisSnapshotRecord.generated_at.desc(),
+                    AnalysisSnapshotRecord.id.desc(),
+                )
+                .limit(limit)
+                .offset(offset)
+            )
+        ).all()
+        return tuple(_analysis_snapshot_to_domain(record) for record in records)
+
+    async def count_for_portfolio(self, portfolio_id: UUID) -> int:
+        count = await self._session.scalar(
+            select(func.count())
+            .select_from(AnalysisSnapshotRecord)
+            .where(AnalysisSnapshotRecord.portfolio_id == portfolio_id)
+        )
+        return int(count or 0)
 
 
 class PostgresUserRepository:
@@ -97,6 +125,34 @@ class PostgresPortfolioRepository:
             .with_for_update()
         )
         return _portfolio_to_domain(record)
+
+    async def list_for_owner(
+        self,
+        owner_id: UUID,
+        limit: int,
+        offset: int,
+    ) -> tuple[Portfolio, ...]:
+        records = (
+            await self._session.scalars(
+                select(PortfolioRecord)
+                .where(PortfolioRecord.owner_id == owner_id)
+                .order_by(
+                    PortfolioRecord.created_at.desc(),
+                    PortfolioRecord.id.desc(),
+                )
+                .limit(limit)
+                .offset(offset)
+            )
+        ).all()
+        return tuple(_portfolio_to_domain_required(record) for record in records)
+
+    async def count_for_owner(self, owner_id: UUID) -> int:
+        count = await self._session.scalar(
+            select(func.count())
+            .select_from(PortfolioRecord)
+            .where(PortfolioRecord.owner_id == owner_id)
+        )
+        return int(count or 0)
 
 
 class PostgresTransactionRepository:
@@ -204,6 +260,30 @@ def _portfolio_to_domain(record: PortfolioRecord | None) -> Portfolio | None:
         owner_id=record.owner_id,
         name=record.name,
         base_currency=record.base_currency,
+    )
+
+
+def _portfolio_to_domain_required(record: PortfolioRecord) -> Portfolio:
+    portfolio = _portfolio_to_domain(record)
+    if portfolio is None:
+        raise RuntimeError("portfolio query returned an empty record")
+    return portfolio
+
+
+def _analysis_snapshot_to_domain(
+    record: AnalysisSnapshotRecord,
+) -> AnalysisSnapshot:
+    return AnalysisSnapshot(
+        id=record.id,
+        portfolio_id=record.portfolio_id,
+        as_of=record.as_of,
+        metrics=record.metrics,
+        methodology=record.methodology,
+        summary=record.summary,
+        generator=record.generator,
+        model_name=record.model_name,
+        prompt_version=record.prompt_version,
+        generated_at=record.generated_at,
     )
 
 

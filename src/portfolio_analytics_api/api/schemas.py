@@ -155,6 +155,13 @@ class PortfolioResponse(BaseModel):
     base_currency: str
 
 
+class PortfolioPageResponse(BaseModel):
+    items: list[PortfolioResponse]
+    total: int
+    limit: int
+    offset: int
+
+
 class MethodologyResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -207,6 +214,42 @@ class PortfolioInsightResponse(BaseModel):
     model_name: str | None
     prompt_version: str
     stale: bool
+
+
+class SnapshotAssetWeightResponse(BaseModel):
+    symbol: str
+    weight: Decimal
+
+
+class SnapshotMetricsResponse(BaseModel):
+    as_of: date
+    simple_return: float | None
+    annualized_volatility: float | None
+    max_drawdown: float | None
+    sharpe_ratio: float | None
+    asset_weights: list[SnapshotAssetWeightResponse]
+    stale: bool
+
+
+class AnalysisSnapshotResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    as_of: date
+    metrics: SnapshotMetricsResponse
+    methodology: MethodologyResponse
+    summary: str | None
+    generator: str | None
+    model_name: str | None
+    prompt_version: str | None
+    generated_at: datetime
+
+
+class AnalysisSnapshotPageResponse(BaseModel):
+    items: list[AnalysisSnapshotResponse]
+    total: int
+    limit: int
+    offset: int
 
 
 class ErrorBody(BaseModel):

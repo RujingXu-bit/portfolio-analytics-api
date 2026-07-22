@@ -178,13 +178,19 @@ another user's portfolio, resisting direct-ID enumeration.
 | `POST` | `/auth/register` | 201 | Register a user. |
 | `POST` | `/auth/login` | 200 | Issue a Bearer access token. |
 | `POST` | `/portfolios` | 201 | Create an owned portfolio. |
+| `GET` | `/portfolios` | 200 | List the current user's portfolios with pagination. |
 | `GET` | `/portfolios/{id}` | 200 | Read one owned portfolio. |
 | `POST` | `/portfolios/{id}/transactions` | 201 or 200 replay | Create an idempotent transaction. |
 | `GET` | `/portfolios/{id}/transactions` | 200 | Read the ordered transaction ledger. |
 | `GET` | `/portfolios/{id}/analytics` | 200 | Calculate historical portfolio analytics. |
 | `POST` | `/portfolios/{id}/insights` | 200 | Persist and return a deterministic or enriched risk summary. |
+| `GET` | `/portfolios/{id}/insights` | 200 | Read persisted analysis snapshots with pagination. |
 
-There is no portfolio-list endpoint and no insight-history endpoint in V1.
+Both list endpoints return `items`, `total`, `limit`, and `offset`. `limit`
+defaults to 20 and is capped at 100; `offset` defaults to zero. Portfolio rows
+are newest-first by creation time, and snapshots are newest-first by generation
+time, with IDs used as deterministic tie-breakers. Every result remains scoped
+to the authenticated owner.
 
 ### Portfolio and transaction flow
 
@@ -231,6 +237,13 @@ curl -H 'Authorization: Bearer <token>' \
 
 curl -H 'Authorization: Bearer <token>' \
   http://127.0.0.1:8000/portfolios/<portfolio-id>/transactions
+```
+
+List owned portfolios for a dashboard:
+
+```bash
+curl -H 'Authorization: Bearer <token>' \
+  'http://127.0.0.1:8000/portfolios?limit=20&offset=0'
 ```
 
 The ledger is ordered by occurrence time, ingestion time, and ID. PostgreSQL
@@ -287,7 +300,16 @@ portfolio name, transactions, raw prices, or cash balance. It may enrich only
 the narrative and additional limitations. Successful generated narratives are
 cached, and every returned result is saved as an `AnalysisSnapshot` with its
 actual generator, model, prompt/rule version, generated time, and structured
-input summary. The API does not currently expose snapshot history.
+input summary. Read the saved history with:
+
+```bash
+curl -H 'Authorization: Bearer <token>' \
+  'http://127.0.0.1:8000/portfolios/<portfolio-id>/insights?limit=20&offset=0'
+```
+
+Historical RC rows whose optional narrative provenance fields were empty remain
+readable; those fields are returned as JSON `null`. No schema migration is
+needed for these query endpoints.
 
 ## Errors, request IDs, and logs
 
@@ -439,10 +461,10 @@ failure stops the job; external provider contracts are excluded.
 - The API provides historical analytics and informational risk explanations,
   not investment advice.
 
-The current `v1.0.0` scope has no `GET /portfolios`, insight-history API,
-refresh tokens, token revocation, second real market-data provider, frontend,
-automatic trading, multi-currency conversion, rate limiting, or production
-deployment.
+The current codebase adds owner-scoped portfolio and insight-history queries
+after the `v1.0.0` release. It still has no refresh tokens, token revocation,
+second real market-data provider, frontend, automatic trading, multi-currency
+conversion, rate limiting, or production deployment.
 
 ## Project structure
 

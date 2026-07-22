@@ -55,6 +55,29 @@ class InMemoryAnalysisSnapshotRepository:
     async def add(self, snapshot: AnalysisSnapshot) -> None:
         self._store.analysis_snapshots.append(snapshot)
 
+    async def list_for_portfolio(
+        self,
+        portfolio_id: UUID,
+        limit: int,
+        offset: int,
+    ) -> tuple[AnalysisSnapshot, ...]:
+        ordered = sorted(
+            (
+                snapshot
+                for snapshot in self._store.analysis_snapshots
+                if snapshot.portfolio_id == portfolio_id
+            ),
+            key=lambda snapshot: (snapshot.generated_at, snapshot.id.hex),
+            reverse=True,
+        )
+        return tuple(ordered[offset : offset + limit])
+
+    async def count_for_portfolio(self, portfolio_id: UUID) -> int:
+        return sum(
+            snapshot.portfolio_id == portfolio_id
+            for snapshot in self._store.analysis_snapshots
+        )
+
 
 class InMemoryPortfolioRepository:
     def __init__(self, store: InMemoryStore | None = None) -> None:
@@ -71,6 +94,25 @@ class InMemoryPortfolioRepository:
 
     async def get_for_update(self, portfolio_id: UUID) -> Portfolio | None:
         return await self.get(portfolio_id)
+
+    async def list_for_owner(
+        self,
+        owner_id: UUID,
+        limit: int,
+        offset: int,
+    ) -> tuple[Portfolio, ...]:
+        ordered = [
+            portfolio
+            for portfolio in reversed(tuple(self._store.portfolios.values()))
+            if portfolio.owner_id == owner_id
+        ]
+        return tuple(ordered[offset : offset + limit])
+
+    async def count_for_owner(self, owner_id: UUID) -> int:
+        return sum(
+            portfolio.owner_id == owner_id
+            for portfolio in self._store.portfolios.values()
+        )
 
 
 class InMemoryTransactionRepository:

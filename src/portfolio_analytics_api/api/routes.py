@@ -6,10 +6,13 @@ from fastapi import APIRouter, Depends, Query, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from portfolio_analytics_api.api.schemas import (
+    AnalysisSnapshotPageResponse,
+    AnalysisSnapshotResponse,
     CreatePortfolioRequest,
     ErrorResponse,
     PortfolioAnalyticsResponse,
     PortfolioInsightResponse,
+    PortfolioPageResponse,
     PortfolioResponse,
     TransactionInput,
     TransactionResponse,
@@ -59,6 +62,25 @@ def build_portfolio_router(
             base_currency=request.base_currency,
         )
         return PortfolioResponse.model_validate(portfolio)
+
+    @router.get(
+        "",
+        response_model=PortfolioPageResponse,
+    )
+    async def list_portfolios(
+        user: Annotated[User, Depends(current_user)],
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        offset: Annotated[int, Query(ge=0)] = 0,
+    ) -> PortfolioPageResponse:
+        page = await portfolio_service.list(user.id, limit, offset)
+        return PortfolioPageResponse(
+            items=[
+                PortfolioResponse.model_validate(portfolio) for portfolio in page.items
+            ],
+            total=page.total,
+            limit=page.limit,
+            offset=page.offset,
+        )
 
     @router.get(
         "/{portfolio_id}",
@@ -158,5 +180,32 @@ def build_portfolio_router(
             end_date=end_date,
         )
         return PortfolioInsightResponse.model_validate(insight)
+
+    @router.get(
+        "/{portfolio_id}/insights",
+        response_model=AnalysisSnapshotPageResponse,
+        responses={404: {"model": ErrorResponse}},
+    )
+    async def list_portfolio_insights(
+        portfolio_id: UUID,
+        user: Annotated[User, Depends(current_user)],
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        offset: Annotated[int, Query(ge=0)] = 0,
+    ) -> AnalysisSnapshotPageResponse:
+        page = await insight_service.list_snapshots(
+            owner_id=user.id,
+            portfolio_id=portfolio_id,
+            limit=limit,
+            offset=offset,
+        )
+        return AnalysisSnapshotPageResponse(
+            items=[
+                AnalysisSnapshotResponse.model_validate(snapshot)
+                for snapshot in page.items
+            ],
+            total=page.total,
+            limit=page.limit,
+            offset=page.offset,
+        )
 
     return router

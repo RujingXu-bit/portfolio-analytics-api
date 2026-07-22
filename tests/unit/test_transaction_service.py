@@ -46,6 +46,21 @@ class FakePortfolioRepository:
     async def get_for_update(self, portfolio_id: UUID) -> Portfolio | None:
         return await self.get(portfolio_id)
 
+    async def list_for_owner(
+        self, owner_id: UUID, limit: int, offset: int
+    ) -> tuple[Portfolio, ...]:
+        portfolios = tuple(
+            portfolio
+            for portfolio in self._portfolios.values()
+            if portfolio.owner_id == owner_id
+        )
+        return portfolios[offset : offset + limit]
+
+    async def count_for_owner(self, owner_id: UUID) -> int:
+        return sum(
+            portfolio.owner_id == owner_id for portfolio in self._portfolios.values()
+        )
+
 
 class FakeTransactionRepository:
     def __init__(self, transactions: list[Transaction]) -> None:
@@ -88,6 +103,14 @@ class FakeUserRepository:
 
 class FakeAnalysisSnapshotRepository:
     async def add(self, snapshot: AnalysisSnapshot) -> None:
+        raise AssertionError("snapshot repository is not used by transaction tests")
+
+    async def list_for_portfolio(
+        self, portfolio_id: UUID, limit: int, offset: int
+    ) -> tuple[AnalysisSnapshot, ...]:
+        raise AssertionError("snapshot repository is not used by transaction tests")
+
+    async def count_for_portfolio(self, portfolio_id: UUID) -> int:
         raise AssertionError("snapshot repository is not used by transaction tests")
 
 

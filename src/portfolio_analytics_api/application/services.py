@@ -129,6 +129,22 @@ class TransactionCreation:
     created: bool
 
 
+@dataclass(frozen=True, slots=True)
+class PortfolioPage:
+    items: tuple[Portfolio, ...]
+    total: int
+    limit: int
+    offset: int
+
+
+@dataclass(frozen=True, slots=True)
+class AnalysisSnapshotPage:
+    items: tuple[AnalysisSnapshot, ...]
+    total: int
+    limit: int
+    offset: int
+
+
 class PortfolioService:
     def __init__(
         self,
@@ -161,6 +177,21 @@ class PortfolioService:
             if portfolio is None or portfolio.owner_id != owner_id:
                 raise PortfolioNotFoundError(portfolio_id)
             return portfolio
+
+    async def list(
+        self,
+        owner_id: UUID,
+        limit: int,
+        offset: int,
+    ) -> PortfolioPage:
+        async with self._unit_of_work_factory() as unit_of_work:
+            items = await unit_of_work.portfolios.list_for_owner(
+                owner_id,
+                limit,
+                offset,
+            )
+            total = await unit_of_work.portfolios.count_for_owner(owner_id)
+        return PortfolioPage(items=items, total=total, limit=limit, offset=offset)
 
 
 class PortfolioAnalyticsService:
@@ -317,6 +348,32 @@ class PortfolioInsightService:
             await unit_of_work.analysis_snapshots.add(snapshot)
             await unit_of_work.commit()
         return insight
+
+    async def list_snapshots(
+        self,
+        owner_id: UUID,
+        portfolio_id: UUID,
+        limit: int,
+        offset: int,
+    ) -> AnalysisSnapshotPage:
+        async with self._unit_of_work_factory() as unit_of_work:
+            portfolio = await unit_of_work.portfolios.get(portfolio_id)
+            if portfolio is None or portfolio.owner_id != owner_id:
+                raise PortfolioNotFoundError(portfolio_id)
+            items = await unit_of_work.analysis_snapshots.list_for_portfolio(
+                portfolio_id,
+                limit,
+                offset,
+            )
+            total = await unit_of_work.analysis_snapshots.count_for_portfolio(
+                portfolio_id
+            )
+        return AnalysisSnapshotPage(
+            items=items,
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
 
 
 def _build_insight_input(analytics: PortfolioAnalytics) -> InsightInput:
