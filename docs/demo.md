@@ -1,4 +1,4 @@
-# Three-Minute V1 Release-Candidate Demo
+# Three-Minute V1 Release Demo
 
 This demo uses only public HTTP endpoints. It creates its own uniquely named
 user, portfolio, deposit, and BUY; proves transaction idempotency; calculates

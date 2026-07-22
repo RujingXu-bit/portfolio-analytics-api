@@ -55,7 +55,7 @@ def run_demo(client: httpx.Client, config: DemoConfig) -> dict[str, object]:
             "/portfolios",
             expected_status=201,
             headers=headers,
-            json={"name": "V1 release candidate demo", "base_currency": "USD"},
+            json={"name": "V1 release demo", "base_currency": "USD"},
         )
     )
     portfolio_id = _required_string(portfolio, "id")
@@ -227,7 +227,7 @@ def _required_string(body: dict[str, Any], field: str) -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run the V1 release-candidate flow through public HTTP APIs."
+        description="Run the V1 release flow through public HTTP APIs."
     )
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--email")
