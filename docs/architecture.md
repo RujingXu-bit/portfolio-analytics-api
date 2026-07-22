@@ -18,7 +18,9 @@ RequestObservabilityMiddleware (request ID + structured request log)
         -> MarketDataProvider protocol
              -> Redis cache decorator
                   -> retry/deadline decorator
-                       -> provider observation -> YFinanceMarketDataProvider
+                       -> provider observation -> configured adapter
+                                                    |-> yfinance
+                                                    `-> Twelve Data
         -> deterministic domain analytics functions
         -> PortfolioInsightService -> deterministic rules
              -> cached optional InsightGenerator -> DeepSeek
@@ -89,12 +91,15 @@ The domain layer contains immutable values and deterministic financial
 functions. It has no FastAPI, database, Pandas, provider, network, system clock,
 or infrastructure dependency.
 
-The infrastructure layer supplies PostgreSQL repositories, a real yfinance
-adapter, and offline adapters used by unit tests. Both providers return only the
-project's `PriceBar` type. The yfinance adapter runs its blocking SDK call in a
-worker thread, explicitly requests unadjusted columns so it can select `Adj
-Close`, and normalizes the exchange-local session date before returning data.
-Pandas and vendor response objects never leave the infrastructure layer.
+The infrastructure layer supplies PostgreSQL repositories, real yfinance and
+Twelve Data adapters, and offline adapters used by unit tests. Every provider
+returns only the project's `PriceBar` type. The yfinance adapter runs its
+blocking SDK call in a worker thread, explicitly requests unadjusted columns so
+it can select `Adj Close`, and normalizes the exchange-local session date. The
+Twelve Data adapter performs async HTTPS, requests `interval=1day` with
+`adjust=all`, preserves the provider's exchange-local session date, and maps
+only validated close values. Pandas, HTTP responses, and vendor payloads never
+leave the infrastructure layer.
 The observation decorator inside the retry boundary emits one latency and
 outcome event for every actual provider attempt. Cache hits therefore emit a
 cache event without pretending that an upstream call occurred; retryable and
@@ -110,8 +115,9 @@ versioned by provider, interval, price basis, symbol, and date range. Mutable
 daily ranges use a short TTL, completed historical ranges use a longer TTL, and
 a longer-lived shadow copy supports stale fallback. Cache misses call a bounded
 retry decorator, which retries only transient provider failures within one
-operation deadline before reaching yfinance. After retries are exhausted, the
-cache decorator may return a valid shadow copy marked stale. Corrupt payloads
+operation deadline before reaching the configured adapter. After retries are
+exhausted, the cache decorator may return a valid shadow copy marked stale.
+Corrupt payloads
 and Redis failures are logged and safely bypassed. The async Redis client is
 closed with the database engine during application shutdown.
 
@@ -159,8 +165,9 @@ the input, cache value, snapshot, response, or log message.
 
 The API persists Portfolio and Transaction resources and exposes creation,
 owner-scoped portfolio listing and lookup, ordered transaction listing, and
-multi-asset analytics. Data survives process and engine recreation. The Week 3
-market-data path uses yfinance behind
+multi-asset analytics. Data survives process and engine recreation. The
+market-data path uses an explicitly selected yfinance or Twelve Data adapter
+behind
 Redis cache, bounded retry/deadline handling, stable upstream errors, and
 explicit stale metadata. W4.1 provides registration, login, password hashing,
 and access-token validation. W4.2 requires Bearer authentication for every
@@ -179,9 +186,9 @@ checked-in lockfile with the pinned uv release, then runs Ruff, the format
 check, strict mypy, and unit tests. Disposable PostgreSQL 16 and Redis 7 service
 containers use only test credentials. The job upgrades an empty `_test`
 database to the Alembic head, checks ORM/migration drift, runs integration
-tests, and finally builds and health-checks the runtime image. Real yfinance
-and DeepSeek contract tests remain explicit opt-in commands and are not CI
-dependencies.
+tests, and finally builds and health-checks the runtime image. Real yfinance,
+Twelve Data, and DeepSeek contract tests remain explicit opt-in commands and
+are not CI dependencies.
 
 The runtime image is based on Python 3.12 slim, installs only the locked
 production dependency group, includes the Alembic configuration and revisions,

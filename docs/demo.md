@@ -22,9 +22,11 @@ make db-upgrade
 make dev
 ```
 
-The normal application uses yfinance, so the live analytics portion needs
-internet access but no API credential. Leave `DEEPSEEK_API_KEY` empty to
-demonstrate the deterministic fallback without an external LLM.
+The default application uses yfinance, so the live analytics portion needs
+internet access but no API credential. To demonstrate the second provider, set
+`MARKET_DATA_PROVIDER=twelve_data` and `TWELVE_DATA_API_KEY` before startup.
+Leave `DEEPSEEK_API_KEY` empty to demonstrate the deterministic fallback
+without an external LLM.
 
 In a second terminal, run:
 
@@ -99,8 +101,9 @@ bodies, queries, tokens, passwords, keys, and raw exception messages.
 Show the CI and measured-performance sections in `README.md`: empty-database
 migration, offline unit/integration suites, non-root container smoke, and the
 reproducible cold/hot cache comparison. Close by naming the limits: historical
-analytics rather than prediction/advice, one real provider, no second provider,
-refresh-token system, automatic trading, or multi-currency conversion. Mention
+analytics rather than prediction/advice, explicit provider selection without
+automatic failover, no refresh-token system, automatic trading, or
+multi-currency conversion. Mention
 that v1.1 adds dashboard queries and Redis request limits without changing the
 financial methodology, and that the independent frontend is publicly deployed.
 
@@ -109,7 +112,8 @@ financial methodology, and that the independent frontend is publicly deployed.
 - A duplicate-email error is avoided by the command's unique generated user.
 - Re-running the command creates a new isolated demo portfolio; it does not
   require deleting previous rows.
-- If yfinance is unavailable, the API returns its stable 502/503/504 error
+- If the selected provider is unavailable, the API returns its stable
+  502/503/504 error
   rather than fabricated analytics. Do not patch the provider or hand-edit the
   database during a demo; use the verified offline tests and recorded benchmark
   as evidence, then rerun the same command when the upstream is available.

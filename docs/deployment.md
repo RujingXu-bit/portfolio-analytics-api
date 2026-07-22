@@ -47,6 +47,12 @@ JWT signing and rate-limit HMAC secrets.
 Do not configure `DEEPSEEK_API_KEY` for the public demo. The API will use the
 deterministic `risk-rules-v1` fallback and remain independent of an LLM quota.
 
+Keep `MARKET_DATA_PROVIDER=yfinance` unless a Twelve Data key has been added as
+a Render secret. To switch explicitly, set `MARKET_DATA_PROVIDER=twelve_data`
+and `TWELVE_DATA_API_KEY`; redeploy and run the opt-in contract check first.
+There is no automatic cross-provider failover, and the key must never be placed
+in `render.yaml`, logs, screenshots, or cache keys.
+
 The Blueprint enables forwarded-IP handling because Render is the trusted edge
 proxy. Do not copy that setting to an environment where arbitrary clients can
 reach Uvicorn directly; otherwise a caller could forge `X-Forwarded-For`.

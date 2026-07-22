@@ -8,9 +8,12 @@ from portfolio_analytics_api.infrastructure.insights import (
 )
 from portfolio_analytics_api.infrastructure.market_data import (
     CachedMarketDataProvider,
+    MarketDataProviderName,
     ObservedMarketDataProvider,
     RetryingMarketDataProvider,
+    TwelveDataMarketDataProvider,
     YFinanceMarketDataProvider,
+    create_market_data_adapter,
 )
 from portfolio_analytics_api.infrastructure.memory import (
     FakeInsightGenerator,
@@ -36,8 +39,11 @@ __all__ = [
     "InMemoryTransactionRepository",
     "InMemoryUnitOfWork",
     "JwtAccessTokenService",
+    "MarketDataProviderName",
     "ObservedMarketDataProvider",
     "RetryingMarketDataProvider",
     "RedisFixedWindowRateLimiter",
+    "TwelveDataMarketDataProvider",
     "YFinanceMarketDataProvider",
+    "create_market_data_adapter",
 ]

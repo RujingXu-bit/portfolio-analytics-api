@@ -3,6 +3,17 @@
 All notable changes to this project are documented here. The format follows
 Keep a Changelog conventions, and package versions follow PEP 440.
 
+## [Unreleased]
+
+### Added
+
+- An async Twelve Data market-data adapter using total-return-adjusted daily
+  prices, the existing `PriceBar` contract, stable provider errors, bounded
+  retries, provider-specific cache keys, and an opt-in real contract test.
+- Explicit `MARKET_DATA_PROVIDER` configuration. yfinance remains the
+  credential-free default; Twelve Data requires an environment-only API key
+  and never activates through silent failover.
+
 ## [1.1.0] - 2026-07-22
 
 First public-demo backend enhancement release. The corresponding Git tag is

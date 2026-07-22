@@ -315,6 +315,37 @@ an exchange holiday. The methodology exposes this policy. Implicit BUY funding
 supports incomplete imported cash ledgers, while making that contribution
 explicit and neutral to performance instead of silently allowing negative cash.
 
+## 2026-07-22: Add Twelve Data as the explicit second market-data provider
+
+### Context
+
+M1.1 completed the public V1 workflow, so E2.1 can now add a second real source
+without displacing core correctness work. The adapter must preserve the same
+total-return adjusted-close methodology and existing resilience/cache boundary.
+
+### Decision
+
+- Add Twelve Data `time_series` as the second adapter, requesting daily data
+  with `adjust=all` and inclusive date bounds.
+- Use async `httpx` directly rather than another vendor SDK. Normalize only
+  validated exchange-local session dates and positive finite Decimal closes
+  into `PriceBar`.
+- Select `yfinance` or `twelve_data` explicitly through
+  `MARKET_DATA_PROVIDER`; keep yfinance as the credential-free default and fail
+  startup when Twelve Data is selected without `TWELVE_DATA_API_KEY`.
+- Reuse the existing observed retry/deadline and Redis cache decorators. The
+  selected provider name separates logs and cache keys. Do not implement
+  automatic failover.
+- Keep the real call behind the same opt-in contract-test boundary as yfinance;
+  normal CI remains offline.
+
+### Trade-offs
+
+Twelve Data adds a keyed dependency and provider quota, but exercises the
+existing port with a distinct async HTTP implementation. Explicit selection is
+operationally simpler and more reproducible than hidden failover; availability
+switching requires a configuration change and restart.
+
 ## 2026-07-22: Defer the optional second market-data provider
 
 ### Context
@@ -340,6 +371,9 @@ V1 has no automatic provider failover, but avoids placing an optional external
 integration ahead of required portfolio valuation, authentication, AI fallback,
 and release-quality work. The current boundary preserves future switching
 without changing domain calculations or application orchestration.
+
+This decision records the V1 deferral and is superseded for Post-V1 work by the
+E2.1 Twelve Data decision above.
 
 ## 2026-07-22: Bounded market-data resilience and stale semantics
 

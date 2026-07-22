@@ -21,7 +21,7 @@ from portfolio_analytics_api.infrastructure import (
     ObservedMarketDataProvider,
     RedisFixedWindowRateLimiter,
     RetryingMarketDataProvider,
-    YFinanceMarketDataProvider,
+    create_market_data_adapter,
 )
 from portfolio_analytics_api.infrastructure.database import (
     SqlAlchemyUnitOfWork,
@@ -110,6 +110,16 @@ _rate_limit_policies = RateLimitPolicies(
         _settings.rate_limit_authenticated_window_seconds,
     ),
 )
+_twelve_data_api_key = (
+    _settings.twelve_data_api_key.get_secret_value()
+    if _settings.twelve_data_api_key is not None
+    else None
+)
+_market_data_provider_name, _market_data_adapter = create_market_data_adapter(
+    provider_name=_settings.market_data_provider,
+    request_timeout_seconds=_settings.market_data_request_timeout_seconds,
+    twelve_data_api_key=_twelve_data_api_key,
+)
 
 
 def _unit_of_work_factory() -> UnitOfWork:
@@ -128,17 +138,15 @@ app = create_app(
     market_data_provider=CachedMarketDataProvider(
         provider=RetryingMarketDataProvider(
             ObservedMarketDataProvider(
-                YFinanceMarketDataProvider(
-                    request_timeout_seconds=_settings.market_data_request_timeout_seconds
-                ),
-                provider_name="yfinance",
+                _market_data_adapter,
+                provider_name=_market_data_provider_name,
             ),
             max_attempts=_settings.market_data_max_attempts,
             initial_backoff_seconds=_settings.market_data_retry_backoff_seconds,
             operation_timeout_seconds=_settings.market_data_operation_timeout_seconds,
         ),
         cache=_redis,
-        provider_name="yfinance",
+        provider_name=_market_data_provider_name,
         mutable_ttl_seconds=_settings.market_data_mutable_ttl_seconds,
         historical_ttl_seconds=_settings.market_data_historical_ttl_seconds,
         stale_ttl_seconds=_settings.market_data_stale_ttl_seconds,
