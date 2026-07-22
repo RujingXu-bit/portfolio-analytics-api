@@ -8,9 +8,9 @@ source, and release described in the repository.
 
 **Ledger Lens — Full-Stack Fintech Engineering Project**
 [Live Demo](https://portfolio-analytics-web-hazel.vercel.app) ·
-[Backend](https://github.com/RujingXu-bit/portfolio-analytics-api) ·
-[Frontend](https://github.com/RujingXu-bit/portfolio-analytics-web) ·
-[3-Minute Video](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4)
+[Backend](https://github.com/RujingXu-bit/Ledger-Lens-api) ·
+[Frontend](https://github.com/RujingXu-bit/Ledger-Lens-web) ·
+[3-Minute Video](https://github.com/RujingXu-bit/Ledger-Lens-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4)
 
 - Built and deployed an owner-scoped portfolio ledger with FastAPI, Next.js,
   PostgreSQL, Redis, JWT/BFF authentication, idempotent transactions, and
@@ -30,6 +30,6 @@ financial metrics, rule-based AI fallback, CI, and public end-to-end tests.
 
 ## Interview links
 
-- Backend release: <https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.2.0>
+- Backend release: <https://github.com/RujingXu-bit/Ledger-Lens-api/releases/tag/v1.2.0>
 - Offline fixture: <https://portfolio-analytics-web-hazel.vercel.app/demo>
-- Architecture guide: <https://github.com/RujingXu-bit/portfolio-analytics-api/blob/main/docs/interview-guide.md>
+- Architecture guide: <https://github.com/RujingXu-bit/Ledger-Lens-api/blob/main/docs/interview-guide.md>

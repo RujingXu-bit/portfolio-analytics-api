@@ -819,7 +819,7 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
   Library 测试和 OpenAPI 漂移检查；`pnpm build` 通过；`pnpm test:e2e` 的 7 项
   Playwright 测试通过 CSV preview、部分提交、幂等 replay、完整分析闭环及
   375/768/1440px 布局；`pnpm audit --audit-level high` 未发现已知漏洞。前端
-  [PR #6](https://github.com/RujingXu-bit/portfolio-analytics-web/pull/6) 已合并到
+  [PR #6](https://github.com/RujingXu-bit/Ledger-Lens-web/pull/6) 已合并到
   `main@d453cb04887c96cc1f6ea9ec449ce201be50d66d`，PR 与合并后 Frontend CI、
   Vercel production deployment 均通过；正式域名 4 项公网验收从新访客注册开始，
   完成真实 CSV preview/commit、ledger、analytics、insight 与历史 snapshot 闭环。
@@ -839,7 +839,7 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
   release commit CI run `29951157732` 全部成功。
 - annotated `v1.2.0` tag 已推送并解引用到 release commit；非 draft、非
   prerelease GitHub Release 已发布：
-  <https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.2.0>。
+  <https://github.com/RujingXu-bit/Ledger-Lens-api/releases/tag/v1.2.0>。
   Release 附带已验证的 wheel 与 sdist，GitHub 分别记录 SHA-256 digest；tag、
   Release 和构建元数据版本一致。计划内 Post-V1/P2 工作至此无剩余任务。
 
@@ -932,7 +932,7 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
   373 词完整英文口播及逐句一致的 18 条 SRT；最终成片为 3:00、1920×1080、
   16:9、30fps，含 AAC 英文口播和烧录字幕。成片作为 `v1.1.0` Release asset
   发布：
-  <https://github.com/RujingXu-bit/portfolio-analytics-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4>。
+  <https://github.com/RujingXu-bit/Ledger-Lens-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4>。
 - 画面覆盖 Landing、注册、Portfolio 创建、DEPOSIT/BUY ledger、Provider-backed
   analytics、四项指标、资产权重、`as_of`/provenance、展开 methodology、确定性
   风险回退、limitations、免责声明、历史 snapshot 和 CI。所有 Provider-backed
@@ -950,7 +950,7 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
   指向 Live Demo；`docs/resume-project-entry.md` 提供可直接粘贴且链接一致的英文
   简历项目条目。前端 PR #5 的 quality/browser/Vercel checks 均通过，已 squash
   merge 为 `cea77e252ee76182436bdced52afee3f5a849f09`：
-  <https://github.com/RujingXu-bit/portfolio-analytics-web/pull/5>。
+  <https://github.com/RujingXu-bit/Ledger-Lens-web/pull/5>。
 - 验证：后端 `make check` 通过 Ruff、format、mypy 和 180 项单元测试，branch
   coverage 89%；前端 `pnpm check` 通过 42 项测试，`pnpm build` 通过 12 个 route；
   Live Demo、offline fixture、前后端仓库、Release、视频和个人主页链接均实测
@@ -976,7 +976,7 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
   Accessibility 100、Best Practices 100、SEO 100（单次公网实验数据，不作为
   SLA）。前端 PR #4 的 quality/browser 与 Vercel checks 均通过，已 squash merge
   为 `6f43020d4f148140efe108d6a171bb987cefe95a`：
-  <https://github.com/RujingXu-bit/portfolio-analytics-web/pull/4>。迁移、应用回滚、
+  <https://github.com/RujingXu-bit/Ledger-Lens-web/pull/4>。迁移、应用回滚、
   秘密配置与限流降级步骤记录于 `docs/deployment.md`。下一步：执行 `M1.1`。
 
 - [x] F1.2 在独立前端仓库完成英文求职展示闭环：Landing 与明确标记为
@@ -994,13 +994,13 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
   查询闭环及三种响应式宽度；`pnpm audit` 为 0 个已知漏洞，`git diff --check`
   通过。GitHub Actions run `29933342504` 的 quality/browser jobs 均通过，PR #2
   已合并为 `a139048461ad60e538c3a92b0e3837ba0f853e37`：
-  <https://github.com/RujingXu-bit/portfolio-analytics-web/pull/2>。annotated
+  <https://github.com/RujingXu-bit/Ledger-Lens-web/pull/2>。annotated
   `v1.0.0` tag 与该提交一致，非 draft、非 prerelease Release 已发布：
-  <https://github.com/RujingXu-bit/portfolio-analytics-web/releases/tag/v1.0.0>。
+  <https://github.com/RujingXu-bit/Ledger-Lens-web/releases/tag/v1.0.0>。
   下一步：执行 `D1.1`。
 
 - [x] F1.1 在独立公开仓库
-  <https://github.com/RujingXu-bit/portfolio-analytics-web> 建立 Node.js 24、
+  <https://github.com/RujingXu-bit/Ledger-Lens-web> 建立 Node.js 24、
   Next.js 16.2.11 App Router、TypeScript、pnpm 11.9.0 与 Tailwind 基线；固定后端
   `v1.1.0` OpenAPI snapshot 并生成 TypeScript declarations，CI 会重新生成到临时
   文件并检查类型漂移。
@@ -1014,7 +1014,7 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
   `pnpm audit` 为 0 个已知漏洞，`git diff --check` 通过。GitHub PR #1 的远端
   `quality` job 通过并合并为
   `5a9266a9af112fb7fe454713d166957d73d44b74`：
-  <https://github.com/RujingXu-bit/portfolio-analytics-web/pull/1>。下一步：执行
+  <https://github.com/RujingXu-bit/Ledger-Lens-web/pull/1>。下一步：执行
   `F1.2`。
 
 - [x] E1.2 完成公网请求限流与部署基线：Redis 固定窗口按注册 IP、登录 IP、
@@ -1036,7 +1036,7 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
 - GitHub PR #18 的两个 quality jobs 和 main 合并提交 CI run `29928214096` 均
   通过。annotated `v1.1.0` tag 与 `origin/main` 同指
   `3f321b6b762f77e52d6773792f43802fffd62ff1`，非 draft、非 prerelease Release
-  已发布：<https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.1.0>。
+  已发布：<https://github.com/RujingXu-bit/Ledger-Lens-api/releases/tag/v1.1.0>。
   下一步：执行 `F1.1`。
 
 - [x] E1.1 完成前端依赖的查询能力：新增认证后的 `GET /portfolios` 与
@@ -1067,7 +1067,7 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
   Python `>=3.12`；`uv lock --check`、Compose 配置与 `git diff --check` 通过。
   GitHub PR #15 的两个 quality jobs 均通过。
 - annotated `v1.0.0` tag 已推送，非 prerelease GitHub Release 已发布：
-  <https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.0.0>。
+  <https://github.com/RujingXu-bit/Ledger-Lens-api/releases/tag/v1.0.0>。
   已用 `git branch --merged origin/main` 解析目标并删除 11 个已合并本地功能分支；
   `main`、当前 release 分支、未合并分支和版本 tags 均保留。下一步：执行
   `E1.1`。
