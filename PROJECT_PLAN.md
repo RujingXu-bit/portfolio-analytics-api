@@ -18,7 +18,7 @@
 ### 当前状态
 
 - 项目阶段：后端正式版 `v1.0.0` 已发布，进入 Post-V1 公开演示增强阶段。
-- 当前优先任务：`E1.2`，实现公网限流、部署配置并发布后端 `v1.1.0`。
+- 当前优先任务：`F1.1`，建立独立 Next.js 前端与 BFF 认证边界。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
 - Post-V1 后端目标版本：`v1.1.0`；独立 Web 前端目标版本：`v1.0.0`。
@@ -626,7 +626,7 @@ Release 指向同一已验证提交；未合并分支和版本 tags 未被删除
 snapshot 按生成时间倒序；跨用户 ID 访问不泄漏资源存在性；旧 snapshot 可读；
 OpenAPI、README、架构文档、离线测试和 PostgreSQL 集成测试同步通过。
 
-#### [ ] E1.2 公网限流、部署配置与后端 v1.1.0（10–14h）
+#### [x] E1.2 公网限流、部署配置与后端 v1.1.0（10–14h）
 
 依赖：E1.1。
 
@@ -720,6 +720,28 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] E1.2 完成公网请求限流与部署基线：Redis 固定窗口按注册 IP、登录 IP、
+  规范化 email、analytics 用户、insights 用户和普通认证用户分别使用
+  `5/10min`、`10/10min`、`5/10min`、`20/min`、`10/min`、`120/min` 阈值。
+  所有 identifier 经部署 secret 的 HMAC-SHA256 后进入 key；不保存明文 IP、
+  email、JWT 或请求体。超限统一返回 `429 rate_limited` 和 `Retry-After`；Redis
+  或脚本响应失败仅记录异常类型与 `rate_limit_bypass` 并允许核心请求继续。
+- 新增 Render Starter Docker Blueprint、独立 pre-deploy Alembic migration、
+  `/health` 检查及 Neon/Upstash TLS、秘密、回滚和公网验收说明；Render 是唯一
+  默认信任 forwarded IP 的环境。公开配置不设置 `DEEPSEEK_API_KEY`，继续使用
+  deterministic fallback；实际云资源创建与公网闭环仍属于 D1.1。
+- 验证：`make check` 通过 Ruff、format、严格 mypy（85 个源文件）和 177 项
+  离线单元测试，branch coverage 89%；`make test-all` 的 192 项单元/集成测试
+  全部通过，综合 branch coverage 93%，其中真实 Redis 并发边界为 30 次同时
+  请求严格 20 通过/10 拒绝且 key 自动过期。`make image-smoke`、`uv build`、
+  `uv lock --check`、`make db-check`、Compose/Render YAML 与 `git diff --check`
+  通过；wheel/sdist 元数据为 `1.1.0`、Python `>=3.12`。
+- GitHub PR #18 的两个 quality jobs 和 main 合并提交 CI run `29928214096` 均
+  通过。annotated `v1.1.0` tag 与 `origin/main` 同指
+  `3f321b6b762f77e52d6773792f43802fffd62ff1`，非 draft、非 prerelease Release
+  已发布：<https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.1.0>。
+  下一步：执行 `F1.1`。
 
 - [x] E1.1 完成前端依赖的查询能力：新增认证后的 `GET /portfolios` 与
   `GET /portfolios/{id}/insights`，统一返回 `items/total/limit/offset`；limit
