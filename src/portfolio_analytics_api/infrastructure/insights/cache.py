@@ -72,21 +72,21 @@ class CachedInsightGenerator:
         except RedisError:
             cache_available = False
             cached = None
-            self._log("bypass", key)
+            self._log("bypass")
 
         if cached is not None:
             try:
                 parsed = _CachedInsight.model_validate_json(cached)
             except (ValidationError, UnicodeDecodeError):
-                self._log("corrupt", key)
+                self._log("corrupt")
             else:
-                self._log("hit", key)
+                self._log("hit")
                 return GeneratedInsight(
                     summary=parsed.summary,
                     additional_limitations=tuple(parsed.additional_limitations),
                 )
         elif cache_available:
-            self._log("miss", key)
+            self._log("miss")
 
         generated = await self._generator.generate(insight_input)
         if not cache_available:
@@ -99,7 +99,7 @@ class CachedInsightGenerator:
         try:
             await self._cache.set(key, payload, ex=self._ttl_seconds)
         except RedisError:
-            self._log("bypass", key)
+            self._log("bypass")
         return generated
 
     def _key(self, insight_input: InsightInput) -> str:
@@ -110,9 +110,12 @@ class CachedInsightGenerator:
         return f"{self._namespace}:v1:{identity}:{digest}"
 
     @staticmethod
-    def _log(cache_status: str, key: str) -> None:
+    def _log(cache_status: str) -> None:
         logger.info(
-            "insight cache %s",
-            cache_status,
-            extra={"cache_status": cache_status, "cache_key": key},
+            "insight cache event",
+            extra={
+                "event": "insight.cache",
+                "cache_name": "insight",
+                "cache_status": cache_status,
+            },
         )

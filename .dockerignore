@@ -1,0 +1,17 @@
+.artifacts/
+.coverage
+.env
+.env.*
+.git/
+.github/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+**/__pycache__/
+**/*.py[cod]
+benchmarks/
+docs/
+htmlcov/
+tests/
+compose.yaml

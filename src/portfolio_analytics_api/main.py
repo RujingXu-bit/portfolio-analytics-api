@@ -5,7 +5,7 @@ import redis.asyncio as redis
 
 from portfolio_analytics_api.api import create_app
 from portfolio_analytics_api.application import InsightGenerator, UnitOfWork
-from portfolio_analytics_api.core import get_settings
+from portfolio_analytics_api.core import configure_logging, get_settings
 from portfolio_analytics_api.domain import AnalyticsMethodology
 from portfolio_analytics_api.infrastructure import (
     Argon2PasswordHasher,
@@ -13,6 +13,7 @@ from portfolio_analytics_api.infrastructure import (
     CachedMarketDataProvider,
     DeepSeekInsightGenerator,
     JwtAccessTokenService,
+    ObservedMarketDataProvider,
     RetryingMarketDataProvider,
     YFinanceMarketDataProvider,
 )
@@ -23,6 +24,7 @@ from portfolio_analytics_api.infrastructure.database import (
 )
 
 _settings = get_settings()
+configure_logging(_settings.log_level)
 if _settings.jwt_secret_key is None:
     raise RuntimeError("JWT_SECRET_KEY must be configured")
 _engine = create_database_engine(_settings.database_url)
@@ -73,8 +75,11 @@ app = create_app(
     unit_of_work_factory=_unit_of_work_factory,
     market_data_provider=CachedMarketDataProvider(
         provider=RetryingMarketDataProvider(
-            YFinanceMarketDataProvider(
-                request_timeout_seconds=_settings.market_data_request_timeout_seconds
+            ObservedMarketDataProvider(
+                YFinanceMarketDataProvider(
+                    request_timeout_seconds=_settings.market_data_request_timeout_seconds
+                ),
+                provider_name="yfinance",
             ),
             max_attempts=_settings.market_data_max_attempts,
             initial_backoff_seconds=_settings.market_data_retry_backoff_seconds,

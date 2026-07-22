@@ -1,238 +1,461 @@
 # AI-Powered Portfolio Analytics API
 
-A FastAPI backend for deterministic and explainable portfolio analytics.
+A FastAPI modular monolith for recording portfolios and transactions, valuing
+multi-asset holdings, and returning deterministic, explainable historical risk
+analytics. PostgreSQL stores the owned transaction ledger, Redis caches market
+data and optional generated narratives, yfinance supplies adjusted-close
+history, and an optional DeepSeek adapter can explain metrics that the backend
+has already calculated.
 
-The current vertical slice persists portfolios and idempotent transaction
-ledgers in PostgreSQL, validates holdings rules, and returns deterministic
-multi-asset portfolio analytics using adjusted-close history from yfinance.
-It can optionally enrich the deterministic risk summary through DeepSeek while
-preserving a rule-based fallback. Unit and integration tests use fixed fake
-market data and a Fake Insight Generator and do not require network access.
+This V1 does not predict prices, automate trades, or guarantee returns. The LLM
+never calculates or overrides financial metrics or the deterministic risk
+classification. Unit tests and normal CI are fully offline.
 
-## Financial methodology
+Current candidate: `1.0.0rc1` / Git tag `v1.0.0-rc.1`. See the
+[candidate changelog](CHANGELOG.md), [three-minute demo](docs/demo.md), and
+[interview guide](docs/interview-guide.md). A release candidate is not a
+general-availability or production-capacity claim.
 
-The domain types, deterministic metric calculations, and V1 financial
-conventions are documented in [`docs/methodology.md`](docs/methodology.md).
+完全不懂代码的使用者请从
+[中文零基础项目说明](docs/项目说明-零基础.md)开始。
+
+## Architecture
+
+```text
+HTTP client
+  -> request-ID / JSON logging middleware
+  -> FastAPI validation and authentication
+  -> application services (ownership + transaction boundaries)
+       -> SQLAlchemy repositories -> PostgreSQL 16
+       -> market-data cache -> bounded retry -> observed yfinance adapter
+                               Redis 7
+       -> deterministic domain valuation and metrics
+       -> deterministic risk rules -> optional cached DeepSeek narrative
+```
+
+The API layer contains no SQL or financial algorithms. Domain calculations do
+not depend on FastAPI, SQLAlchemy, Pandas, a network, or the system clock.
+Provider-specific objects are converted to the project's `PriceBar` type at the
+infrastructure boundary. See [architecture](docs/architecture.md),
+[methodology](docs/methodology.md), and [decisions](docs/decisions.md) for the
+complete design and trade-offs.
 
 ## Requirements
 
-- uv
 - Git
+- [uv](https://docs.astral.sh/uv/)
 - Docker Desktop or another Docker Compose-compatible runtime
-- Python 3.12, installed automatically by uv when required
+- Python 3.12; uv installs the pinned project version when needed
 
-## Install
+No external API credential is required for installation, tests, health,
+authentication, or deterministic insights. Analytics in the running
+application use yfinance and therefore require internet access.
 
-From the project root:
+## Clean installation and startup
+
+From the repository root:
 
 ```bash
 make install
-
+cp .env.example .env
 ```
 
-This installs the locked application and development dependencies from
-`uv.lock`.
+Replace `JWT_SECRET_KEY=replace_me` in `.env` with a private value containing at
+least 32 characters. The checked-in values are local-only placeholders.
 
-## Run the application
+Start PostgreSQL and Redis, migrate the empty database, and run the API:
 
 ```bash
-cp .env.example .env
-# Replace JWT_SECRET_KEY with at least 32 random characters before starting.
 make infra-up
+make infra-check
 make db-upgrade
 make dev
 ```
 
-The API is available at <http://127.0.0.1:8000>.
+Application startup intentionally does not run migrations. Run
+`make db-upgrade` once for a new database and after pulling a revision that
+contains a new migration. `make db-check` reports whether ORM metadata would
+require another migration.
 
-Check application health in a second terminal:
+The API and interactive OpenAPI documentation are available at:
 
-```bash
-curl http://127.0.0.1:8000/health
-```
+- <http://127.0.0.1:8000>
+- <http://127.0.0.1:8000/docs>
 
-Expected response:
-
-```json
-{"status":"ok"}
-```
-
-Interactive API documentation is available at
-<http://127.0.0.1:8000/docs>.
-
-## Authentication
-
-Register an account and exchange its credentials for a 30-minute JWT access
-token. Email addresses are stored in normalized lowercase form, passwords are
-stored only as Argon2 hashes, and authentication failures use one stable 401
-response without distinguishing an unknown email from a wrong password.
+Verify health in another terminal:
 
 ```bash
-curl -X POST http://127.0.0.1:8000/auth/register \
+curl -i http://127.0.0.1:8000/health
+```
+
+The response is `200 {"status":"ok"}` and includes an `X-Request-ID` header.
+Stop local services without deleting the PostgreSQL volume with
+`make infra-down`.
+
+After startup, `make demo` runs the complete API-driven candidate flow without
+manual database edits: registration/login, owned portfolio creation, DEPOSIT,
+idempotent BUY replay, analytics, and deterministic insight. The normal app's
+analytics call uses yfinance, so this live demo requires internet access. See
+the [three-minute talk track](docs/demo.md).
+
+## Environment variables
+
+Pydantic reads process variables first and a local `.env` second. Do not commit
+`.env`; only `.env.example` is tracked.
+
+### Application settings
+
+| Variable | Example/default | Purpose |
+|---|---|---|
+| `APP_ENV` | `development` | Environment label; it does not enable a separate production mode. |
+| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`. |
+| `DATABASE_URL` | local PostgreSQL on `55432` | SQLAlchemy async application database URL. |
+| `TEST_DATABASE_URL` | `_test` database on `55433` | Disposable integration/benchmark database; safety checks require a name ending in `_test`. |
+| `REDIS_URL` | `redis://localhost:6379/0` | Application market-data and insight cache. |
+| `TEST_REDIS_URL` | `redis://localhost:56379/0` | Disposable test/benchmark Redis. |
+| `REDIS_CONNECT_TIMEOUT_SECONDS` | `1` | Redis connection timeout. |
+| `REDIS_READ_TIMEOUT_SECONDS` | `1` | Redis read timeout. |
+| `MARKET_DATA_REQUEST_TIMEOUT_SECONDS` | `10` | Timeout passed to one yfinance request. |
+| `MARKET_DATA_OPERATION_TIMEOUT_SECONDS` | `12` | Deadline for the entire provider retry sequence. |
+| `MARKET_DATA_MAX_ATTEMPTS` | `3` | Maximum attempts for transient provider failures. |
+| `MARKET_DATA_RETRY_BACKOFF_SECONDS` | `0.25` | Initial exponential retry delay. |
+| `MARKET_DATA_MUTABLE_TTL_SECONDS` | `300` | TTL for daily ranges ending today or later. |
+| `MARKET_DATA_HISTORICAL_TTL_SECONDS` | `86400` | TTL for completed historical ranges. |
+| `MARKET_DATA_STALE_TTL_SECONDS` | `604800` | Retention for an explicitly stale fallback copy. |
+| `DEFAULT_BASE_CURRENCY` | `USD` | Validated project setting; V1 clients should still send `base_currency` explicitly when it is not USD. |
+| `JWT_SECRET_KEY` | required | Private HS256 signing value, at least 32 characters. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Access-token lifetime. |
+| `DEEPSEEK_API_KEY` | empty | Optional; an empty value keeps insights deterministic and offline. |
+| `DEEPSEEK_MODEL` | `deepseek-v4-flash` | Model used only when the optional key is configured. |
+| `DEEPSEEK_TIMEOUT_SECONDS` | `8` | Hard application/client timeout for narrative generation. |
+| `INSIGHT_CACHE_TTL_SECONDS` | `86400` | TTL for a validated generated narrative. |
+
+`DEFAULT_BASE_CURRENCY` is retained as configuration metadata; the current
+request schema defaults an omitted `base_currency` to USD. Changing this
+setting does not rewrite existing portfolios or perform currency conversion.
+
+### Compose settings
+
+| Variable | Default | Purpose |
+|---|---:|---|
+| `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | local placeholders | Development PostgreSQL initialization. |
+| `POSTGRES_PORT` | `55432` | Development PostgreSQL host port. |
+| `REDIS_PORT` | `6379` | Development Redis host port. |
+| `TEST_POSTGRES_DB` / `TEST_POSTGRES_USER` / `TEST_POSTGRES_PASSWORD` | `_test` placeholders | Disposable test PostgreSQL initialization. |
+| `TEST_POSTGRES_PORT` | `55433` | Test PostgreSQL host port. |
+| `TEST_REDIS_PORT` | `56379` | Test Redis host port. |
+
+## Authentication and ownership
+
+Register a user. Passwords must contain 12–128 characters and are persisted
+only as Argon2 hashes:
+
+```bash
+curl -i -X POST http://127.0.0.1:8000/auth/register \
   -H 'Content-Type: application/json' \
-  -d '{"email":"investor@example.com","password":"replace-with-a-long-password"}'
+  -d '{"email":"investor@example.com","password":"local-demo-password"}'
+```
 
+Login returns a Bearer access token and its lifetime in seconds:
+
+```bash
 curl -X POST http://127.0.0.1:8000/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"investor@example.com","password":"replace-with-a-long-password"}'
+  -d '{"email":"investor@example.com","password":"local-demo-password"}'
 ```
 
-Use the returned `access_token` as `<token>` below. `JWT_SECRET_KEY` is required
-at application startup and is read only from the
-environment (or a local ignored `.env` file). The repository contains no usable
-token-signing key. Every portfolio route requires the Bearer token, and the
-application service returns 404 when a user guesses another user's portfolio
-ID.
+Copy `access_token` from the response and use it below as `<token>`. Unknown
+users, incorrect passwords, malformed tokens, and expired tokens share the same
+401 response. Every portfolio path requires authentication. Application
+services enforce ownership and return the same 404 for a missing portfolio and
+another user's portfolio, resisting direct-ID enumeration.
 
-## Local infrastructure
+## Implemented API
 
-Docker Compose provides PostgreSQL 16 and Redis 7 for local development. The
-checked-in example values are local-only placeholders, not production
-credentials:
+| Method | Path | Success | Purpose |
+|---|---|---:|---|
+| `GET` | `/health` | 200 | Process health. |
+| `POST` | `/auth/register` | 201 | Register a user. |
+| `POST` | `/auth/login` | 200 | Issue a Bearer access token. |
+| `POST` | `/portfolios` | 201 | Create an owned portfolio. |
+| `GET` | `/portfolios/{id}` | 200 | Read one owned portfolio. |
+| `POST` | `/portfolios/{id}/transactions` | 201 or 200 replay | Create an idempotent transaction. |
+| `GET` | `/portfolios/{id}/transactions` | 200 | Read the ordered transaction ledger. |
+| `GET` | `/portfolios/{id}/analytics` | 200 | Calculate historical portfolio analytics. |
+| `POST` | `/portfolios/{id}/insights` | 200 | Persist and return a deterministic or enriched risk summary. |
 
-```bash
-cp .env.example .env
-make infra-up
-make infra-check
-```
+There is no portfolio-list endpoint and no insight-history endpoint in V1.
 
-`make infra-down` stops the services without deleting the PostgreSQL data
-volume. Use `make infra-logs` to follow service logs. Isolated PostgreSQL and
-Redis instances for integration tests are available through
-`make infra-test-up`; `make infra-test-down` removes only those test containers.
+### Portfolio and transaction flow
 
-Market-data cache keys include the schema version, provider, interval, price
-basis, symbol, and inclusive date range. A range ending today or later uses the
-short mutable-data TTL; completed historical ranges use the longer historical
-TTL. Transient provider failures are retried at most three times within a
-12-second operation deadline. After retries are exhausted, a valid retained
-copy may be returned with top-level analytics field `stale: true`; deterministic
-symbol/data errors and damaged cache content never use that fallback. Redis
-failures safely bypass the cache. Quote caching is not exposed because V1 has
-no quote endpoint or provider method.
-
-## Persistent transaction and analytics slice
-
-The running application uses yfinance and accepts symbols supported by Yahoo
-Finance. Create a single-currency, potentially multi-asset portfolio:
+Create a portfolio:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/portfolios \
   -H 'Authorization: Bearer <token>' \
   -H 'Content-Type: application/json' \
-  -d '{
-    "name": "Demo portfolio",
-    "base_currency": "USD"
-  }'
+  -d '{"name":"Demo portfolio","base_currency":"USD"}'
 ```
 
-Use the returned `id` to add a transaction. Repeating the same normalized
-payload with the same `external_id` returns the existing transaction without
-posting it twice:
+Use its returned `id` as `<portfolio-id>`. A BUY or SELL requires `symbol`,
+`quantity`, and `unit_price`; a DEPOSIT or WITHDRAWAL instead requires
+`cash_amount`. All accept non-negative `fees` and a timezone-aware
+`occurred_at`.
 
 ```bash
-curl -X POST http://127.0.0.1:8000/portfolios/<id>/transactions \
+curl -i -X POST \
+  http://127.0.0.1:8000/portfolios/<portfolio-id>/transactions \
   -H 'Authorization: Bearer <token>' \
   -H 'Content-Type: application/json' \
   -d '{
-    "external_id": "demo-buy-001",
-    "transaction_type": "BUY",
-    "occurred_at": "2026-01-02T09:00:00Z",
-    "symbol": "AAPL",
-    "quantity": "2",
-    "unit_price": "100",
-    "fees": "0"
+    "external_id":"demo-buy-001",
+    "transaction_type":"BUY",
+    "occurred_at":"2026-01-02T09:00:00Z",
+    "symbol":"AAPL",
+    "quantity":"2",
+    "unit_price":"100",
+    "fees":"0"
   }'
 ```
 
-Retrieve the portfolio, ordered transaction ledger, or reproducible analytics:
+`external_id` is unique within a portfolio. Repeating an identical normalized
+payload returns the existing transaction with 200 and never posts it twice;
+reusing the ID for different data returns 409. Holdings may not become
+negative.
+
+Read the portfolio and ledger:
 
 ```bash
-curl -H 'Authorization: Bearer <token>' http://127.0.0.1:8000/portfolios/<id>
-curl -H 'Authorization: Bearer <token>' http://127.0.0.1:8000/portfolios/<id>/transactions
 curl -H 'Authorization: Bearer <token>' \
-  'http://127.0.0.1:8000/portfolios/<id>/analytics?start_date=2026-01-02&end_date=2026-01-06'
+  http://127.0.0.1:8000/portfolios/<portfolio-id>
+
+curl -H 'Authorization: Bearer <token>' \
+  http://127.0.0.1:8000/portfolios/<portfolio-id>/transactions
 ```
 
-The response includes cash-flow-adjusted period simple return, annualized
-volatility, maximum drawdown, Sharpe ratio, exact latest portfolio value, cash
-balance, security weights, `as_of`, methodology, and a `stale` flag describing
-market-data freshness. Multiple traded symbols are valued together. Security
-weights use total portfolio value, including cash, as the denominator. Data
-survives application restarts.
+The ledger is ordered by occurrence time, ingestion time, and ID. PostgreSQL
+uses `NUMERIC` columns and Python business objects use `Decimal` for quantities,
+prices, cash, and fees.
 
-Generate the deterministic historical risk summary for the same date range:
+### Analytics
+
+Both dates are required and inclusive:
+
+```bash
+curl -H 'Authorization: Bearer <token>' \
+  'http://127.0.0.1:8000/portfolios/<portfolio-id>/analytics?start_date=2026-01-02&end_date=2026-01-30'
+```
+
+The response contains `as_of`, cash-flow-adjusted `simple_return`, annualized
+volatility, maximum drawdown, Sharpe ratio, exact latest `portfolio_value` and
+`cash_balance`, per-security market values and weights, `methodology`, and the
+aggregate market-data `stale` flag. An undefined statistic is JSON `null`.
+
+Historical daily prices use adjusted close. Transactions are replayed without
+look-ahead; each valuation uses only prices already observed. Valuation dates
+are the union of symbol trading dates, and an old close may be carried forward
+only after it has appeared. External deposits, withdrawals, and the explicit
+funding shortfall of an imported BUY are removed from the performance return;
+fees remain in performance. Weights divide security market value by total
+portfolio value including cash.
+
+Metrics use simple period returns and 252 annual periods. The current running
+app exposes an illustrative annual risk-free rate of 4%, dated 2026-01-01 and
+held constant over the requested interval; it is fixture methodology, not a
+live observed rate. Sharpe ratio is undefined for insufficient or zero-
+volatility returns. Maximum drawdown is calculated from the cash-flow-adjusted
+cumulative wealth path. Every assumption is repeated in the response and fully
+defined in [financial methodology](docs/methodology.md).
+
+### Risk insight
 
 ```bash
 curl -X POST -H 'Authorization: Bearer <token>' \
-  'http://127.0.0.1:8000/portfolios/<id>/insights?start_date=2026-01-02&end_date=2026-01-06'
+  'http://127.0.0.1:8000/portfolios/<portfolio-id>/insights?start_date=2026-01-02&end_date=2026-01-30'
 ```
 
-The versioned rules describe volatility, drawdown, historical Sharpe ratio,
-latest single-security concentration, missing-data limitations, and stale data.
-They always determine the risk level and factors. With no `DEEPSEEK_API_KEY`,
-or if DeepSeek times out, errors, or fails strict response validation, the API
-returns those rules unchanged. With a key, DeepSeek `deepseek-v4-flash` may
-enrich only the narrative from the structured metrics and methodology. Add the
-key only to the ignored local `.env`; never commit it:
+`risk-rules-v1` deterministically classifies volatility, drawdown, historical
+Sharpe ratio, and latest single-security concentration. It always controls the
+risk level, factors, limitations, and informational-use disclaimer. If
+`DEEPSEEK_API_KEY` is absent—or the model times out, is rate-limited, returns
+invalid JSON, or fails content validation—the same endpoint succeeds with the
+rules summary.
 
-```dotenv
-DEEPSEEK_API_KEY=<your-local-key>
+When enabled, DeepSeek receives only structured metrics, symbol weights,
+methodology, `as_of`, and freshness. It receives no credentials, user identity,
+portfolio name, transactions, raw prices, or cash balance. It may enrich only
+the narrative and additional limitations. Successful generated narratives are
+cached, and every returned result is saved as an `AnalysisSnapshot` with its
+actual generator, model, prompt/rule version, generated time, and structured
+input summary. The API does not currently expose snapshot history.
+
+## Errors, request IDs, and logs
+
+Errors use one stable envelope:
+
+```json
+{
+  "error": {
+    "code": "portfolio_not_found",
+    "message": "portfolio 00000000-0000-0000-0000-000000000000 was not found"
+  }
+}
 ```
 
-Successful generated narratives are cached in Redis for 86,400 seconds by
-default. Every insight result is saved as an `AnalysisSnapshot` containing the
-actual generator/model, prompt or rule version, generation time, input metrics
-summary, and methodology. All paths retain the fixed informational-use and
-non-investment-advice disclaimer.
+Validation uses `validation_error`; duplicate registration does not echo the
+email. Unexpected exceptions return only `internal_error` and a generic
+message. Market-data errors map as follows when no stale copy can be used:
 
-Upstream rate limiting and availability failures return stable 503 errors when
-no stale fallback exists; provider timeouts return 504, malformed upstream data
-returns 502, and invalid or empty symbols retain the existing 422 mapping.
+| Condition | HTTP | Code |
+|---|---:|---|
+| invalid or empty symbol data | 422 | `market_data_not_found` |
+| malformed provider data | 502 | `market_data_invalid_response` |
+| rate limit | 503 | `market_data_rate_limited` |
+| temporary provider/network failure | 503 | `market_data_unavailable` |
+| operation timeout | 504 | `market_data_timeout` |
 
-## Quality commands
+Every HTTP response includes `X-Request-ID`. A valid caller-supplied UUID is
+normalized and retained; a missing or invalid value is replaced and the
+invalid text is never logged. Application and Uvicorn logs are UTC, one-line
+JSON with fixed fields for the request, cache, provider outcome, status, and
+latency. They do not include bodies, query strings, headers, passwords, JWTs,
+API keys, settings, cache payloads, or raw exception messages.
+
+## Cache, retry, and stale behavior
+
+Market-data cache keys are versioned by provider, interval, price basis,
+symbol, and inclusive date range. With the defaults, ranges ending today or
+later live for 300 seconds, completed history for 86,400 seconds, and a shadow
+copy for 604,800 seconds. Transient provider failures use at most three calls,
+0.25/0.5-second backoff, and one 12-second operation deadline. After retries
+are exhausted, only a validated retained copy may return with `stale: true`.
+Deterministic symbol/data errors never use stale data. Corrupt entries and Redis
+failures are bypassed safely. V1 exposes daily history, not a quote endpoint.
+
+Cache logs use the measurable states `hit`, `miss`, `stale`, `bypass`, and
+`corrupt`. Provider logs describe only actual upstream attempts and include
+duration, success/failure, and a stable error category.
+
+## Runtime image
+
+Build the Python 3.12 slim image and run its isolated health smoke:
 
 ```bash
-make lint
-make typecheck
-make test
-make test-cov
-make test-integration
-make test-all
-make check
-make test-contract
+make image-build
+make image-smoke
 ```
 
-`make test` and `make test-cov` run the offline unit suite. Start the isolated
-test PostgreSQL service before `make test-integration` or `make test-all`.
-`make test-contract` is the only command that enables the optional real
-yfinance network contract test; it is not part of normal CI.
-Database migrations are explicit: run `make db-upgrade` after starting the
-development infrastructure; application startup never applies migrations.
+The locked image contains production dependencies and Alembic revisions, runs
+as non-root UID `10001`, and does not contain tests, local environments, or
+benchmark artifacts. The smoke starts a short-lived container on a random
+loopback port and validates `/health` plus `X-Request-ID`.
 
-To apply automatic formatting:
+To run the image against the Compose services after `make infra-up` and
+`make db-upgrade`:
 
 ```bash
-make format
+docker run --rm --name portfolio-analytics-api \
+  --network portfolio-analytics_default \
+  -p 8000:8000 \
+  -e DATABASE_URL=postgresql+asyncpg://portfolio:portfolio_local_only@postgres:5432/portfolio \
+  -e REDIS_URL=redis://redis:6379/0 \
+  -e JWT_SECRET_KEY=replace-with-at-least-32-private-characters \
+  portfolio-analytics-api:local
 ```
+
+This is a local runtime artifact, not a production deployment recipe. Secret
+management, TLS, orchestration, high availability, and image publishing are
+outside V1.
+
+## Tests, CI, and measured performance
+
+Useful commands:
+
+```bash
+make lint                  # Ruff and formatting check
+make typecheck             # strict mypy
+make test                  # offline unit tests with coverage
+make check                 # lint + typecheck + offline unit tests
+make infra-test-up         # disposable PostgreSQL/Redis test services
+make test-integration      # PostgreSQL/Redis integration tests
+make test-all              # unit + integration tests with coverage
+make load-test             # offline cold/hot Locust benchmark
+make test-contract         # opt-in real yfinance contract
+make image-smoke           # build and health-check the runtime image
+make demo                  # public API release-candidate flow
+```
+
+`make test-integration`, `make test-all`, and `make load-test` require the
+disposable test services. Stop only those containers with
+`make infra-test-down`. The migration integration test refuses to reset a
+database whose name does not end in `_test`. Normal unit/integration tests and
+CI never call yfinance or DeepSeek. A real DeepSeek contract additionally
+requires `RUN_DEEPSEEK_CONTRACT=1` and a local `DEEPSEEK_API_KEY`; it is not
+enabled by a normal quality command.
+
+The final W5.4 local `make test-all` run on 2026-07-22 passed 168 tests (156
+unit, 12 integration) with 93% combined branch coverage. `make check` passed
+Ruff, format checking, strict mypy over 78 source files, and the 156-test unit
+suite with 89% branch coverage. These are repository test results, not a claim
+about untested production environments.
+
+The `1.0.0rc1` candidate adds two focused demo-flow tests. Its final local and
+clean-environment gates passed 170 tests (158 unit, 12 integration) with 93%
+combined branch coverage; `make check` covered 80 source files and the 158-test
+unit suite at 89% branch coverage. The candidate wheel and source distribution
+also built successfully with Python requirement `>=3.12`.
+
+The reproducible W5.2 local load test used macOS 26.5.2 arm64, Python 3.12.13,
+Locust 2.46.1, one Uvicorn worker, PostgreSQL 16, Redis 7, 10 users spawned at
+2 users/second for 60 seconds, 2,000 deterministic price bars, and a synthetic
+provider delayed by 50 ms:
+
+| Scenario | Requests | P50 | P95 | Throughput | Errors | Cache hit rate |
+|---|---:|---:|---:|---:|---:|---:|
+| Cold, unique 60–252-day ranges | 7,448 | 66 ms | 120 ms | 124.343 req/s | 0 | 0% |
+| Hot, repeated prewarmed 252-day range | 25,020 | 22 ms | 34 ms | 417.561 req/s | 0 | 100% |
+
+The cold run logged 7,448 provider calls at 51.000 ms P50 and 52.023 ms P95;
+the measured hot interval made no provider call. This is a local, single-worker
+comparison of cache paths with a synthetic upstream—not a production capacity
+or yfinance performance claim. Full reproduction details are in
+[performance results](docs/performance.md).
+
+GitHub Actions uses the pinned uv version and lockfile, PostgreSQL 16 and Redis
+7 service containers, CI-only settings, an empty `_test` migration/check,
+offline unit and integration suites, and the runtime image smoke. Any command
+failure stops the job; external provider contracts are excluded.
+
+## Security and V1 limits
+
+- Secrets come only from environment variables; the repository contains no
+  usable token or API key.
+- Passwords are Argon2 hashes; JWT validation pins HS256 and validates issuer,
+  audience, type, issue time, and expiry.
+- Users can access only their own portfolios, transactions, analytics, and
+  generated insight flow.
+- Financial values persist as decimal `NUMERIC`, never binary floating-point.
+- The API provides historical analytics and informational risk explanations,
+  not investment advice.
+
+The current scope has no `GET /portfolios`, insight-history API, refresh tokens,
+token revocation, second real market-data provider, frontend, automatic trading,
+multi-currency conversion, production deployment, or general-availability V1
+release.
 
 ## Project structure
 
 ```text
 src/portfolio_analytics_api/
-├── api/
-├── application/
-├── core/
-├── domain/
-├── infrastructure/
-└── main.py
+├── api/              # HTTP routes, schemas, dependencies, middleware
+├── application/      # use cases, ownership, transaction boundaries
+├── core/             # settings and structured logging
+├── domain/           # deterministic values, valuation, metrics, risk rules
+├── infrastructure/   # PostgreSQL, Redis, yfinance, JWT, DeepSeek adapters
+└── main.py            # application assembly
 
 tests/
-├── unit/
-├── integration/
-└── contract/
+├── unit/             # fast and offline
+├── integration/      # disposable PostgreSQL and Redis
+└── contract/         # explicit real external calls
 ```
-
-The project is a modular monolith. Financial calculations remain deterministic
-and independent of network, database, and framework code. The current module
-boundaries are documented in [`docs/architecture.md`](docs/architecture.md).

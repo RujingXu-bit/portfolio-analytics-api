@@ -1,10 +1,15 @@
-.PHONY: install dev test test-unit test-cov test-contract test-integration test-all lint format typecheck check
+IMAGE_NAME ?= portfolio-analytics-api:local
+
+.PHONY: install dev demo test test-unit test-cov test-contract test-integration test-all lint format typecheck check load-test image-build image-smoke
 
 install:
 	uv sync --locked
 
 dev:
 	uv run uvicorn portfolio_analytics_api.main:app --reload
+
+demo:
+	uv run python -m scripts.demo_flow
 
 test:
 	uv run pytest tests/unit --cov=portfolio_analytics_api --cov-report=term-missing
@@ -35,6 +40,16 @@ typecheck:
 	uv run mypy
 
 check: lint typecheck test
+
+load-test:
+	docker compose --profile test up -d --wait postgres-test redis-test
+	uv run python -m benchmarks.run_load_test
+
+image-build:
+	docker build --tag $(IMAGE_NAME) .
+
+image-smoke: image-build
+	uv run python -m scripts.container_smoke $(IMAGE_NAME)
 
 db-upgrade:
 	uv run alembic upgrade head

@@ -7,7 +7,8 @@ financial algorithms.
 ## Current request path
 
 ```text
-FastAPI route
+RequestObservabilityMiddleware (request ID + structured request log)
+    -> FastAPI route
     -> AuthenticationService / PortfolioService / TransactionService
        / PortfolioAnalyticsService
         -> Argon2 PasswordHasher / JWT AccessTokenService
@@ -15,7 +16,8 @@ FastAPI route
                          -> PostgreSQL (SQLAlchemy + asyncpg)
         -> MarketDataProvider protocol
              -> Redis cache decorator
-                  -> retry/deadline decorator -> YFinanceMarketDataProvider
+                  -> retry/deadline decorator
+                       -> provider observation -> YFinanceMarketDataProvider
         -> deterministic domain analytics functions
         -> PortfolioInsightService -> deterministic rules
              -> cached optional InsightGenerator -> DeepSeek
@@ -23,6 +25,16 @@ FastAPI route
 
 The API layer validates and serializes HTTP data. It does not calculate
 financial metrics or access repository storage directly.
+
+Every HTTP request is assigned a UUID request ID. A valid incoming
+`X-Request-ID` is normalized and retained; an absent or malformed value is
+replaced, and the selected ID is returned on every response. The middleware
+binds that ID through a `ContextVar`, so request completion, cache, provider,
+and optional insight fallback events share one correlation value even when
+requests overlap. Logs are one-line JSON with a fixed field allowlist. They do
+not include request bodies, query strings, authorization headers, settings, or
+exception messages. Unexpected exceptions return a generic 500 body while the
+log retains only the exception type and stable error category.
 
 The application layer owns use-case orchestration and transaction boundaries.
 Authentication normalizes email addresses, moves Argon2 work off the event
@@ -57,6 +69,10 @@ project's `PriceBar` type. The yfinance adapter runs its blocking SDK call in a
 worker thread, explicitly requests unadjusted columns so it can select `Adj
 Close`, and normalizes the exchange-local session date before returning data.
 Pandas and vendor response objects never leave the infrastructure layer.
+The observation decorator inside the retry boundary emits one latency and
+outcome event for every actual provider attempt. Cache hits therefore emit a
+cache event without pretending that an upstream call occurred; retryable and
+deterministic failures use stable categories rather than raw vendor messages.
 
 Week 2 persistence uses SQLAlchemy 2.x with asyncpg. ORM records and Alembic
 metadata live only in the infrastructure layer; domain values remain framework
@@ -126,3 +142,35 @@ database schema.
 W4.3-W4.4 expose owner-scoped risk insights with deterministic
 classification, optional DeepSeek narrative enrichment, Redis result caching,
 strict fallback, and durable analysis provenance.
+
+## CI and runtime image
+
+The GitHub Actions quality job is deliberately offline. It installs the
+checked-in lockfile with the pinned uv release, then runs Ruff, the format
+check, strict mypy, and unit tests. Disposable PostgreSQL 16 and Redis 7 service
+containers use only test credentials. The job upgrades an empty `_test`
+database to the Alembic head, checks ORM/migration drift, runs integration
+tests, and finally builds and health-checks the runtime image. Real yfinance
+and DeepSeek contract tests remain explicit opt-in commands and are not CI
+dependencies.
+
+The runtime image is based on Python 3.12 slim, installs only the locked
+production dependency group, includes the Alembic configuration and revisions,
+and runs as numeric user `10001`. Application startup never migrates the
+database: an operator or deployment job must run `alembic upgrade head` before
+starting a release. The image smoke command inspects the configured user and
+starts an ephemeral container on a random loopback port to verify `/health` and
+the response request ID. The image is a local V1 artifact; production
+orchestration, TLS termination, and release publishing remain outside W5.3.
+
+## Local load-test boundary
+
+W5.2 adds a Locust harness outside production application code. It assembles
+the same FastAPI middleware, authentication, SQLAlchemy repositories, analytics
+service, Redis cache, and financial domain path against the disposable `_test`
+PostgreSQL and Redis services. Only the external yfinance adapter is replaced
+by a deterministic 2,000-bar provider with a fixed 50 ms delay. Cold requests
+use unique date ranges; hot requests share one prewarmed key. The runner parses
+Locust's final response-time histogram and correlates request counts with
+structured cache/provider events, failing if either scenario reports errors or
+does not retain its intended cache state. It never invokes yfinance or an LLM.

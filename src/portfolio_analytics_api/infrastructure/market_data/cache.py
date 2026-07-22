@@ -77,7 +77,7 @@ class CachedMarketDataProvider:
         except RedisError:
             cache_available = False
             cached = None
-            self._log("bypass", key)
+            self._log("bypass")
 
         if cached is not None:
             try:
@@ -88,12 +88,12 @@ class CachedMarketDataProvider:
                     end_date=end_date,
                 )
             except ValueError:
-                self._log("corrupt", key)
+                self._log("corrupt")
             else:
-                self._log("hit", key)
+                self._log("hit")
                 return MarketDataResult(bars)
         elif cache_available:
-            self._log("miss", key)
+            self._log("miss")
 
         try:
             result = await self._provider.get_price_bars(
@@ -134,7 +134,7 @@ class CachedMarketDataProvider:
                 ex=self._stale_ttl_seconds,
             )
         except RedisError:
-            self._log("bypass", key)
+            self._log("bypass")
         return result
 
     async def _read_stale(
@@ -151,7 +151,7 @@ class CachedMarketDataProvider:
         try:
             raw_stale = await self._cache.get(self._stale_key(key))
         except RedisError:
-            self._log("bypass", key)
+            self._log("bypass")
             return None
         if raw_stale is None:
             return None
@@ -163,9 +163,9 @@ class CachedMarketDataProvider:
                 end_date=end_date,
             )
         except ValueError:
-            self._log("corrupt", self._stale_key(key))
+            self._log("corrupt")
             return None
-        self._log("stale", key)
+        self._log("stale")
         return bars
 
     def _key(self, symbol: str, start_date: date, end_date: date) -> str:
@@ -179,11 +179,14 @@ class CachedMarketDataProvider:
         return f"{key}:stale"
 
     @staticmethod
-    def _log(cache_status: str, key: str) -> None:
+    def _log(cache_status: str) -> None:
         logger.info(
-            "market data cache %s",
-            cache_status,
-            extra={"cache_status": cache_status, "cache_key": key},
+            "market data cache event",
+            extra={
+                "event": "market_data.cache",
+                "cache_name": "market_data",
+                "cache_status": cache_status,
+            },
         )
 
 
