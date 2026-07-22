@@ -27,10 +27,15 @@ def test_demo_runs_owned_idempotent_analytics_and_insight_flow() -> None:
         if request.url.path == "/auth/register":
             return _response(201, {"id": str(uuid4()), "email": "demo@example.com"})
         if request.url.path == "/auth/login":
+            token = (
+                "other-test-token"
+                if b"other@example.com" in request.content
+                else "safe-test-token"
+            )
             return _response(
                 200,
                 {
-                    "access_token": "safe-test-token",
+                    "access_token": token,
                     "token_type": "bearer",
                     "expires_in": 1800,
                 },
@@ -46,12 +51,32 @@ def test_demo_runs_owned_idempotent_analytics_and_insight_flow() -> None:
                 },
             )
         if request.url.path == f"/portfolios/{portfolio_id}":
+            if request.headers["Authorization"] == "Bearer other-test-token":
+                return _response(
+                    404,
+                    {
+                        "error": {
+                            "code": "portfolio_not_found",
+                            "message": "portfolio not found",
+                        }
+                    },
+                )
             return _response(
                 200,
                 {
                     "id": portfolio_id,
                     "name": "V1 release demo",
                     "base_currency": "USD",
+                },
+            )
+        if request.url.path == "/portfolios" and request.method == "GET":
+            return _response(
+                200,
+                {
+                    "items": [{"id": portfolio_id}],
+                    "total": 1,
+                    "limit": 20,
+                    "offset": 0,
                 },
             )
         if request.url.path.endswith("/transactions"):
@@ -80,12 +105,42 @@ def test_demo_runs_owned_idempotent_analytics_and_insight_flow() -> None:
                 },
             )
         if request.url.path.endswith("/insights"):
+            if request.method == "GET":
+                return _response(
+                    200,
+                    {
+                        "items": [
+                            {
+                                "id": str(uuid4()),
+                                "as_of": "2026-01-30",
+                                "generator": "deterministic_rules",
+                                "model_name": None,
+                                "prompt_version": "risk-rules-v1",
+                            }
+                        ],
+                        "total": 1,
+                        "limit": 20,
+                        "offset": 0,
+                    },
+                )
             return _response(
                 200,
                 {
+                    "as_of": "2026-01-30",
                     "risk_level": "moderate",
                     "generator": "deterministic_rules",
+                    "model_name": None,
                     "prompt_version": "risk-rules-v1",
+                },
+            )
+        if request.url.path.startswith("/portfolios/"):
+            return _response(
+                404,
+                {
+                    "error": {
+                        "code": "portfolio_not_found",
+                        "message": "portfolio not found",
+                    }
                 },
             )
         raise AssertionError(f"unexpected request: {request.method} {request.url}")
@@ -98,6 +153,8 @@ def test_demo_runs_owned_idempotent_analytics_and_insight_flow() -> None:
                 base_url="http://test",
                 email="demo@example.com",
                 password="a-long-demo-password",
+                other_email="other@example.com",
+                other_password="another-long-demo-password",
                 symbol="aapl",
                 start_date=date(2026, 1, 2),
                 end_date=date(2026, 1, 30),
@@ -105,8 +162,12 @@ def test_demo_runs_owned_idempotent_analytics_and_insight_flow() -> None:
         )
 
     assert result["portfolio_id"] == portfolio_id
+    assert result["portfolio_listed"] is True
     assert result["transaction_count"] == 2
     assert result["idempotent_replay"] is True
+    assert result["snapshot_history_count"] == 1
+    assert result["snapshot_persisted"] is True
+    assert result["ownership_isolated"] is True
     assert result["insight"] == {
         "risk_level": "moderate",
         "generator": "deterministic_rules",
@@ -127,6 +188,8 @@ def test_demo_rejects_response_without_request_id() -> None:
                     base_url="http://test",
                     email="demo@example.com",
                     password="a-long-demo-password",
+                    other_email="other@example.com",
+                    other_password="another-long-demo-password",
                     symbol="AAPL",
                     start_date=date(2026, 1, 2),
                     end_date=date(2026, 1, 30),

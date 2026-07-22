@@ -59,6 +59,16 @@ Before attaching a frontend, verify:
 6. Application logs contain neither passwords, JWTs, database/Redis URLs,
    plaintext emails, request bodies, nor rate-limit identifiers.
 
+After the manual browser pass, run the synthetic HTTP acceptance flow against
+the Render origin. It generates unique demo users, verifies list/history reads,
+idempotency, deterministic fallback, and matching cross-user/missing-resource
+404 codes, and prints no credentials:
+
+```bash
+uv run python -m scripts.demo_flow \
+  --base-url https://portfolio-analytics-api.onrender.com
+```
+
 The public registration UI must say: “Demo only. Do not enter real financial or
 sensitive information. Demo data may be reset.”
 
