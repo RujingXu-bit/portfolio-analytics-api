@@ -32,6 +32,13 @@ class Transaction:
     fees: Decimal = Decimal("0")
 
 
+@dataclass(frozen=True, slots=True)
+class Portfolio:
+    id: UUID
+    name: str
+    transactions: tuple[Transaction, ...] = ()
+
+
 class PriceBasis(StrEnum):
     ADJUSTED_CLOSE = "adjusted_close"
 

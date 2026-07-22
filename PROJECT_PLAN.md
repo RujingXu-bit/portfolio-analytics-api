@@ -17,8 +17,8 @@
 
 ### 当前状态
 
-- 项目阶段：Week 1 实施中。
-- 当前优先任务：`W1.4`。
+- 项目阶段：Week 1 已完成，准备进入 Week 2。
+- 当前优先任务：`W2.1`。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
 
@@ -135,7 +135,7 @@ MarketDataProvider ---- Redis Cache
 - 覆盖空数据、单点、价格不变、持续下跌、缺失日期和重复日期。
 - 计算函数无网络、数据库和系统当前时间依赖。
 
-#### [ ] W1.4 完成内存垂直切片（4–6h）
+#### [x] W1.4 完成内存垂直切片（4–6h）
 
 依赖：W1.3。
 
@@ -505,6 +505,12 @@ GET  /health
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] W1.4 完成 `MarketDataProvider` 与 `PortfolioRepository` 协议、`FakeMarketDataProvider`、内存 Repository、Portfolio 创建应用服务和 analytics 应用服务；临时 API 提供 `POST /portfolios` 与 `GET /portfolios/{portfolio_id}/analytics`。
+- 固定单标的交易和 adjusted-close 价格可通过 API 返回区间简单收益率、年化波动率、最大回撤、Sharpe Ratio、`as_of` 与完整 methodology；路由只负责 HTTP schema 和应用服务调用，单标的临时限制已记录于 README、methodology 与架构文档。
+- API 测试使用官方 `httpx.AsyncClient + ASGITransport`，Fake Provider 和内存 Repository 测试完全离线；开发依赖从缺少 mypy 包元数据的 `httpx2` 更正为官方 `httpx`，`pyproject.toml` 与 `uv.lock` 已同步。
+- 验证：`make check` 通过，Ruff 与格式检查无问题，mypy 检查 26 个源文件无问题，pytest 36 项通过且 branch coverage 为 100%；`uv lock --check` 通过；依赖扫描确认 API 层未直接执行金融算法，领域层未依赖框架或基础设施。
+- Week 1（W1.1–W1.4）全部完成；下一步：执行 `W2.1 建立本地基础设施`。
 
 - [x] W1.3 完成简单日收益率、样本年化波动率、最大回撤和年化 Sharpe Ratio 的纯函数实现；无风险利率和年化周期均由调用方传入。
 - 边界行为已固定并记录于 `docs/methodology.md`：空数据、单点数据、价格不变、持续下跌、缺失日期、重复日期、非正或非有限价格，以及无效年化周期和无风险利率。

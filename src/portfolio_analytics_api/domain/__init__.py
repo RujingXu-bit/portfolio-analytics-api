@@ -7,6 +7,7 @@ from portfolio_analytics_api.domain.analytics import (
 )
 from portfolio_analytics_api.domain.models import (
     AnalyticsMethodology,
+    Portfolio,
     PortfolioAnalytics,
     PriceBar,
     PriceBasis,
@@ -18,6 +19,7 @@ from portfolio_analytics_api.domain.models import (
 __all__ = [
     "AnalyticsMethodology",
     "InvalidPriceSeriesError",
+    "Portfolio",
     "PortfolioAnalytics",
     "PriceBar",
     "PriceBasis",

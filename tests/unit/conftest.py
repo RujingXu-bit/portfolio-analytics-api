@@ -7,6 +7,11 @@ from portfolio_analytics_api.domain import AnalyticsMethodology
 
 
 @pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
+
+
+@pytest.fixture
 def analytics_methodology() -> AnalyticsMethodology:
     """Provide deterministic, illustrative assumptions for unit tests."""
     return AnalyticsMethodology(
