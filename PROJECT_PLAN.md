@@ -18,7 +18,7 @@
 ### 当前状态
 
 - 项目阶段：后端正式版 `v1.0.0` 已发布，进入 Post-V1 公开演示增强阶段。
-- 当前优先任务：`F1.2`，完成独立 Web 前端的演示闭环 UI。
+- 当前优先任务：`D1.1`，完成低成本公开部署与公网验收。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
 - Post-V1 后端目标版本：`v1.1.0`；独立 Web 前端目标版本：`v1.0.0`。
@@ -652,7 +652,7 @@ Route Handlers 代理允许的后端路径，并以 HttpOnly/Secure/SameSite Coo
 token；私有响应不缓存，写请求执行同源校验，401 清除会话；前端 lint、类型、
 单元测试和 production build 通过。
 
-#### [ ] F1.2 完整演示闭环 UI（20–28h）
+#### [x] F1.2 完整演示闭环 UI（20–28h）
 
 依赖：F1.1。
 
@@ -720,6 +720,26 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] F1.2 在独立前端仓库完成英文求职展示闭环：Landing 与明确标记为
+  deterministic offline fixture 的 `/demo`、注册自动登录、Portfolio 列表与
+  创建、条件化交易表单和 ledger、显式日期 analytics、四项指标、资产权重、
+  `as_of`/stale provenance/methodology、用户主动生成的风险摘要及 snapshot
+  历史；未加入编辑删除、实时行情、预测、自动交易或 refresh token。
+- 私有页面继续经 Next.js BFF 访问后端；Playwright 主流程证明 JWT 不出现在
+  页面、响应体、Local Storage、Session Storage、客户端日志或可读取 Cookie。
+  375/768/1440px 布局无横向溢出，键盘路径通过；浏览器实测 Landing 与 fixture
+  页面无 console warning/error，并修正了 fixture provenance 文案。
+- 验证：Node 24 下 `pnpm check` 通过 ESLint、TypeScript、14 个 Vitest 文件的
+  40 项测试及 OpenAPI 类型漂移检查；`pnpm build` 通过 12 个 Next.js route 的
+  production build；`pnpm test:e2e` 的 4 项 Chromium 测试通过完整注册至历史
+  查询闭环及三种响应式宽度；`pnpm audit` 为 0 个已知漏洞，`git diff --check`
+  通过。GitHub Actions run `29933342504` 的 quality/browser jobs 均通过，PR #2
+  已合并为 `a139048461ad60e538c3a92b0e3837ba0f853e37`：
+  <https://github.com/RujingXu-bit/portfolio-analytics-web/pull/2>。annotated
+  `v1.0.0` tag 与该提交一致，非 draft、非 prerelease Release 已发布：
+  <https://github.com/RujingXu-bit/portfolio-analytics-web/releases/tag/v1.0.0>。
+  下一步：执行 `D1.1`。
 
 - [x] F1.1 在独立公开仓库
   <https://github.com/RujingXu-bit/portfolio-analytics-web> 建立 Node.js 24、
