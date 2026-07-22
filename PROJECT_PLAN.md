@@ -17,9 +17,9 @@
 
 ### 当前状态
 
-- 项目阶段：后端 `v1.2.0`、公开演示、Post-V1 P2 增强及前端 CSV 导入均已
-  完成；正在统一作品品牌为 `Ledger Lens`。
-- 当前优先任务：`F2.2 Ledger Lens 品牌统一`。
+- 项目阶段：后端 `v1.2.0`、公开演示、Post-V1 P2 增强、前端 CSV 导入及
+  `Ledger Lens` 品牌统一均已完成。
+- 当前优先任务：无；计划内任务均已完成并通过本地、CI 与公网验收。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
 - Post-V1 后端当前正式版：`v1.2.0`；独立 Web
@@ -767,7 +767,7 @@ commit 后刷新 ledger。前端只做 1,000,000 bytes/CSV 类型的快速校验
 `pnpm check`、production build、前端 CI 与公开 Vercel 验收通过，README/OpenAPI
 类型漂移检查同步更新。
 
-#### [ ] F2.2 Ledger Lens 品牌统一（3–5h）
+#### [x] F2.2 Ledger Lens 品牌统一（3–5h）
 
 依赖：F2.1。
 
@@ -806,6 +806,21 @@ AnalysisSnapshot 查询、限流、前端和轻量公开部署以第 8 节为准
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
 
 ### 2026-07-22
+
+- [x] F2.2 已将前后端面向用户、面试官和搜索引擎的产品名统一为
+  `Ledger Lens`：Brand、Landing、SEO/Open Graph、OpenAPI 标题、README、演示
+  脚本/字幕、简历入口和计划文档均已更新；OG 图由内置 image generation 生成，
+  Dashboard 与九张演示截图从公开站点重新采集并完成视觉抽查。领域/API schema、
+  Python/Node 包名和部署资源名保持兼容；GitHub canonical URL 已同步为
+  `RujingXu-bit/Ledger-Lens-api` 与 `RujingXu-bit/Ledger-Lens-web`。
+- 验证：后端 `make check` 通过 Ruff、format、严格 mypy、223 项单元测试和 90%
+  branch coverage，品牌/演示专项 36 项测试通过，PR #34 两个 quality jobs 通过；
+  前端 Node.js 24 的 `pnpm check`、production build 和 7 项 Playwright 测试通过，
+  [PR #7](https://github.com/RujingXu-bit/Ledger-Lens-web/pull/7) 与
+  [PR #8](https://github.com/RujingXu-bit/Ledger-Lens-web/pull/8) 已合并，合并后 Frontend
+  CI run `29955337083` 的 quality/browser jobs 通过。Vercel production 首页实测
+  `<title>`、application name、Open Graph title、可见品牌和 Source 链接均为
+  `Ledger Lens`/canonical URL。
 
 - [x] F2.1 已完成独立前端 CSV 交易导入 UI。固定 OpenAPI snapshot 与生成类型
   已升级到后端 `v1.2.0`；BFF 仅新增精确的 CSV preview/commit allowlist，以
