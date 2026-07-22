@@ -5,6 +5,10 @@ Keep a Changelog conventions, and package versions follow PEP 440.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-22
+
+Post-V1 optional enhancement release. The corresponding Git tag is `v1.2.0`.
+
 ### Added
 
 - An async Twelve Data market-data adapter using total-return-adjusted daily
@@ -16,6 +20,25 @@ Keep a Changelog conventions, and package versions follow PEP 440.
 - Preview-first UTF-8 CSV transaction import with bounded document size,
   structured row errors, stable source-provided `external_id` replay, explicit
   partial commit results, and the existing ownership/Decimal/ledger boundary.
+
+### Fixed
+
+- Twelve Data requests now use the documented 5,000-point maximum and reject
+  responses that reach that limit as potentially truncated. Long-window
+  analytics therefore fail closed instead of silently calculating from an
+  incomplete adjusted-price history.
+
+### Release verification
+
+- R2.1 passed on synchronized `main@2cf07bd27e928d30065ebd40aee8541d35397d26`
+  with no unresolved findings after the long-window remediation.
+- `make check` passed Ruff, formatting, strict mypy over 95 source files, and
+  223 unit tests at 90% branch coverage. `make test-all` passed 239
+  unit/integration tests at 94% branch coverage.
+- `make db-check`, `uv lock --check`, `uv build`, `git diff --check`, and
+  `make image-smoke` passed. The real yfinance contract plus Twelve Data short-
+  and long-window contracts passed with the official demo key; DeepSeek stayed
+  disabled as an unrelated optional contract.
 
 ## [1.1.0] - 2026-07-22
 

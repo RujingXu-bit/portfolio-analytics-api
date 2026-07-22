@@ -202,7 +202,7 @@ async def test_openapi_documents_rate_limit_responses_and_release_version() -> N
 
     assert response.status_code == 200
     document = response.json()
-    assert document["info"]["version"] == "1.1.0"
+    assert document["info"]["version"] == "1.2.0"
     for path, method in (
         ("/auth/register", "post"),
         ("/auth/login", "post"),
