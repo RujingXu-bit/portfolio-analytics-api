@@ -17,7 +17,8 @@ def test_render_blueprint_uses_runtime_and_safe_secret_placeholders() -> None:
         assert required in blueprint
 
     assert "--host 0.0.0.0" in blueprint
-    assert "${PORT:-10000}" in blueprint
+    assert "--port $PORT" in blueprint
+    assert "${PORT:-10000}" not in blueprint
     assert "sh -c" not in blueprint
     assert "DEEPSEEK_API_KEY" not in blueprint
     assert "postgresql+asyncpg://" not in blueprint
