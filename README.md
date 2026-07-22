@@ -5,6 +5,11 @@ A FastAPI backend for deterministic and explainable portfolio analytics.
 The current engineering skeleton provides a health endpoint and the quality
 tooling required for later portfolio and financial analytics work.
 
+## Financial methodology
+
+The domain types, deterministic metric calculations, and V1 financial
+conventions are documented in [`docs/methodology.md`](docs/methodology.md).
+
 ## Requirements
 
 - uv

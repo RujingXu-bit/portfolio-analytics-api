@@ -18,7 +18,7 @@
 ### 当前状态
 
 - 项目阶段：Week 1 实施中。
-- 当前优先任务：`W1.2`。
+- 当前优先任务：`W1.4`。
 - 当前阻塞：无。
 - V1目标版本：`v1.0.0`。
 
@@ -100,7 +100,7 @@ MarketDataProvider ---- Redis Cache
 - Ruff、mypy 和空测试套件可以成功运行。
 - `uv.lock` 已生成并纳入版本控制。
 
-#### [ ] W1.2 定义领域类型和金融口径（3–4h）
+#### [x] W1.2 定义领域类型和金融口径（3–4h）
 
 依赖：W1.1。
 
@@ -117,7 +117,7 @@ MarketDataProvider ---- Redis Cache
 - 金融假设写入文档和测试 fixture 说明。
 - 领域类型不依赖 FastAPI、SQLAlchemy、Pandas 或具体 Provider。
 
-#### [ ] W1.3 实现核心金融指标（8–10h）
+#### [x] W1.3 实现核心金融指标（8–10h）
 
 依赖：W1.2。
 
@@ -503,6 +503,18 @@ GET  /health
 ## 9. 进度日志
 
 按时间倒序记录。每条只写事实、验证结果和下一步，不记录未验证的完成声明。
+
+### 2026-07-22
+
+- [x] W1.3 完成简单日收益率、样本年化波动率、最大回撤和年化 Sharpe Ratio 的纯函数实现；无风险利率和年化周期均由调用方传入。
+- 边界行为已固定并记录于 `docs/methodology.md`：空数据、单点数据、价格不变、持续下跌、缺失日期、重复日期、非正或非有限价格，以及无效年化周期和无风险利率。
+- 验证：`make check` 通过，Ruff 与格式检查无问题，mypy 检查 17 个源文件无问题，pytest 23 项通过且 branch coverage 为 100%；依赖扫描确认领域计算未引入网络、数据库或系统当前时间依赖。
+- 下一步：执行 `W1.4 完成内存垂直切片`。
+
+- [x] W1.2 完成 `PriceBar`、领域 `Transaction`、`PortfolioAnalytics`、交易类型枚举和 `AnalyticsMethodology` 定义，并公开领域包导入。
+- 金融口径已记录于 `docs/methodology.md`：adjusted close、简单日收益率、默认 252 年化周期、可配置无风险利率及 methodology 输出字段；固定测试 fixture 明确标记为示例数据。
+- 验证：`make check` 通过，Ruff 与格式检查无问题，mypy 检查 15 个源文件无问题，pytest 7 项通过且 coverage 为 100%；领域目录未引入 FastAPI、SQLAlchemy、Pandas、yfinance 或具体 Provider 依赖。
+- 下一步：执行 `W1.3 实现核心金融指标`。
 
 ### 2026-07-21
 
