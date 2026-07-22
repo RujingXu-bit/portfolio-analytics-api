@@ -4,7 +4,7 @@ Verification date: 2026-07-22 (Europe/Dublin)
 
 ## Final media
 
-- Public asset: [GitHub Release download](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4)
+- Public asset: [GitHub Release download](https://github.com/RujingXu-bit/Ledger-Lens-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4)
 - Local build output: `docs/assets/portfolio-analytics-demo.mp4` (ignored because
   the 10 MB final binary is stored as a Release asset rather than duplicated in
   Git history)

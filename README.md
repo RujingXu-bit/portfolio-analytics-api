@@ -1,25 +1,25 @@
-# AI-Powered Portfolio Analytics API
+# Ledger Lens API
 
-[![CI](https://github.com/RujingXu-bit/portfolio-analytics-api/actions/workflows/ci.yml/badge.svg)](https://github.com/RujingXu-bit/portfolio-analytics-api/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/RujingXu-bit/portfolio-analytics-api)](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.2.0)
+[![CI](https://github.com/RujingXu-bit/Ledger-Lens-api/actions/workflows/ci.yml/badge.svg)](https://github.com/RujingXu-bit/Ledger-Lens-api/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/RujingXu-bit/Ledger-Lens-api)](https://github.com/RujingXu-bit/Ledger-Lens-api/releases/tag/v1.2.0)
 [![Live Demo](https://img.shields.io/badge/Live_Demo-Vercel-000000?logo=vercel)](https://portfolio-analytics-web-hazel.vercel.app)
-[![Frontend](https://img.shields.io/badge/Frontend-Next.js-111827?logo=nextdotjs)](https://github.com/RujingXu-bit/portfolio-analytics-web)
+[![Frontend](https://img.shields.io/badge/Frontend-Next.js-111827?logo=nextdotjs)](https://github.com/RujingXu-bit/Ledger-Lens-web)
 
 [Live Demo](https://portfolio-analytics-web-hazel.vercel.app) ·
 [Offline Fixture](https://portfolio-analytics-web-hazel.vercel.app/demo) ·
-[Three-Minute Video](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4) ·
+[Three-Minute Video](https://github.com/RujingXu-bit/Ledger-Lens-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4) ·
 [Video Script](docs/demo-video-script.md) ·
 [English Captions](docs/demo-video-captions.srt) ·
 [Verification](docs/demo-video-verification.md) ·
-[Backend Release](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/tag/v1.2.0) ·
-[Frontend Repository](https://github.com/RujingXu-bit/portfolio-analytics-web) ·
+[Backend Release](https://github.com/RujingXu-bit/Ledger-Lens-api/releases/tag/v1.2.0) ·
+[Frontend Repository](https://github.com/RujingXu-bit/Ledger-Lens-web) ·
 [CSV Import Guide](docs/csv-import.md) ·
 [Interview Guide](docs/interview-guide.md) ·
 [Resume Entry](docs/resume-project-entry.md)
 
-![Portfolio Analytics dashboard showing four historical metrics and asset allocation](docs/assets/dashboard-demo.png)
+![Ledger Lens dashboard showing four historical metrics and asset allocation](docs/assets/dashboard-demo.png)
 
-The 1080p [three-minute narrated walkthrough](https://github.com/RujingXu-bit/portfolio-analytics-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4)
+The 1080p [three-minute narrated walkthrough](https://github.com/RujingXu-bit/Ledger-Lens-api/releases/download/v1.1.0/portfolio-analytics-demo.mp4)
 covers the public full-stack workflow, financial methodology, deterministic AI
 fallback, security boundary, and CI evidence. Its Provider-backed frames are
 dated and labelled as pre-recorded; the outage fallback is explicitly marked as
@@ -519,7 +519,7 @@ The `v1.1.0` backend added owner-scoped portfolio/snapshot queries, Redis reques
 limits, and reproducible Render/Neon/Upstash configuration. `v1.2.0` adds
 explicit yfinance/Twelve Data selection and preview-first CSV transaction
 import. The independent
-[Next.js frontend](https://github.com/RujingXu-bit/portfolio-analytics-web) is
+[Next.js frontend](https://github.com/RujingXu-bit/Ledger-Lens-web) is
 available as a [public demo](https://portfolio-analytics-web-hazel.vercel.app).
 The project still has no automatic provider failover, refresh tokens, token
 revocation, automatic trading, or multi-currency conversion.

@@ -203,6 +203,7 @@ async def test_openapi_exposes_paginated_portfolio_and_snapshot_queries() -> Non
         response = await client.get("/openapi.json")
 
     assert response.status_code == 200
+    assert response.json()["info"]["title"] == "Ledger Lens API"
     paths = response.json()["paths"]
     assert "get" in paths["/portfolios"]
     assert "get" in paths["/portfolios/{portfolio_id}/insights"]

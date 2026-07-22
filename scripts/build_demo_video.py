@@ -303,8 +303,8 @@ def create_title_card(path: Path, kind: str) -> None:
         )
         links = [
             "LIVE DEMO  portfolio-analytics-web-hazel.vercel.app",
-            "BACKEND    github.com/RujingXu-bit/portfolio-analytics-api",
-            "FRONTEND   github.com/RujingXu-bit/portfolio-analytics-web",
+            "BACKEND    github.com/RujingXu-bit/Ledger-Lens-api",
+            "FRONTEND   github.com/RujingXu-bit/Ledger-Lens-web",
             "RELEASE    portfolio-analytics-api/releases/tag/v1.1.0",
         ]
         y = 535

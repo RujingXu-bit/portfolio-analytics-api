@@ -74,7 +74,7 @@ def test_readme_exposes_portfolio_entry_points() -> None:
         "docs/assets/dashboard-demo.png",
         "docs/demo-video-script.md",
         "docs/demo-video-captions.srt",
-        "https://github.com/RujingXu-bit/portfolio-analytics-web",
+        "https://github.com/RujingXu-bit/Ledger-Lens-web",
         "releases/tag/v1.2.0",
         "docs/interview-guide.md",
     ):
