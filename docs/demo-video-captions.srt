@@ -1,0 +1,71 @@
+1
+00:00:00,000 --> 00:00:09,000
+Portfolio Analytics turns an auditable transaction ledger into explainable historical risk metrics.
+
+2
+00:00:09,000 --> 00:00:20,000
+It is a public engineering demo, not a trading terminal: it does not predict prices, automate trades, or provide investment advice. The offline demo stays available when providers fail.
+
+3
+00:00:20,000 --> 00:00:28,000
+The system is a modular monolith. A Next.js BFF keeps the access token inside an HttpOnly cookie.
+
+4
+00:00:28,000 --> 00:00:39,000
+FastAPI coordinates owner-scoped use cases, PostgreSQL stores precise Decimal values, and Redis handles market-data caching and fixed-window rate limits.
+
+5
+00:00:39,000 --> 00:00:45,000
+Financial calculations stay deterministic; an optional language model can only explain their output.
+
+6
+00:00:45,000 --> 00:00:55,000
+Here I register with synthetic information and automatically enter an authenticated session. I create a US-dollar portfolio,
+
+7
+00:00:55,000 --> 00:01:05,000
+then record a cash deposit and an Apple purchase. Each transaction has a stable idempotency reference, so retrying a failed submission cannot double-post the ledger.
+
+8
+00:01:05,000 --> 00:01:14,000
+The backend validates quantities, prices, fees, funding, and ownership. Another user receives the same not-found response as a genuinely missing portfolio.
+
+9
+00:01:14,000 --> 00:01:21,000
+Money stays Decimal through domain boundaries and PostgreSQL NUMERIC in storage, while statistical conversions are explicit, local, and covered by tolerance tests.
+
+10
+00:01:21,000 --> 00:01:25,000
+The browser never reads or stores the API token.
+
+11
+00:01:25,000 --> 00:01:36,000
+Analytics runs only after I choose a date range. The response includes simple return, annualized volatility, maximum drawdown, and the historical Sharpe ratio.
+
+12
+00:01:36,000 --> 00:01:47,000
+The allocation chart combines latest security values with cash. Every result carries an as-of date, a stale flag, and provider provenance.
+
+13
+00:01:47,000 --> 00:02:05,000
+I can open methodology to inspect adjusted close, simple daily returns, 252-period annualization, the dated illustrative risk-free rate, cash-flow treatment, fees, timezone, and no-look-ahead alignment.
+
+14
+00:02:05,000 --> 00:02:16,000
+Risk summaries are generated only when I request them. The language model never calculates metrics, assigns authority, or changes the risk level.
+
+15
+00:02:16,000 --> 00:02:30,000
+With no DeepSeek key in the public deployment, deterministic risk rules return a bounded explanation, limitations, disclaimer, generator, prompt version, and a persisted historical snapshot.
+
+16
+00:02:30,000 --> 00:02:40,000
+Security is enforced at both layers: HttpOnly sessions in the BFF, owner checks in application services, Argon2 passwords, and HMAC-hashed rate-limit identifiers.
+
+17
+00:02:40,000 --> 00:02:50,000
+Transactions are idempotent. CI tests database migrations, PostgreSQL, Redis, offline financial edge cases, container startup, and cache behavior. The latest quality workflow passes.
+
+18
+00:02:50,000 --> 00:03:00,000
+This product explains historical behavior; it does not forecast prices or recommend trades. The live demo, source code, architecture notes, release, and three-minute video are linked from GitHub.
