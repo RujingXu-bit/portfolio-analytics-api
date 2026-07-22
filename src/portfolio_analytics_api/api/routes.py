@@ -2,23 +2,27 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 
 from portfolio_analytics_api.api.schemas import (
     CreatePortfolioRequest,
     ErrorResponse,
     PortfolioAnalyticsResponse,
     PortfolioResponse,
+    TransactionInput,
+    TransactionResponse,
 )
 from portfolio_analytics_api.application import (
     NewTransaction,
     PortfolioAnalyticsService,
     PortfolioService,
+    TransactionService,
 )
 
 
 def build_portfolio_router(
     portfolio_service: PortfolioService,
+    transaction_service: TransactionService,
     analytics_service: PortfolioAnalyticsService,
 ) -> APIRouter:
     router = APIRouter(prefix="/portfolios", tags=["portfolios"])
@@ -32,21 +36,62 @@ def build_portfolio_router(
     async def create_portfolio(request: CreatePortfolioRequest) -> PortfolioResponse:
         portfolio = await portfolio_service.create(
             name=request.name,
-            transactions=tuple(
-                NewTransaction(
-                    external_id=transaction.external_id,
-                    transaction_type=transaction.transaction_type,
-                    occurred_at=transaction.occurred_at,
-                    symbol=transaction.symbol,
-                    quantity=transaction.quantity,
-                    unit_price=transaction.unit_price,
-                    cash_amount=transaction.cash_amount,
-                    fees=transaction.fees,
-                )
-                for transaction in request.transactions
-            ),
+            base_currency=request.base_currency,
         )
         return PortfolioResponse.model_validate(portfolio)
+
+    @router.get(
+        "/{portfolio_id}",
+        response_model=PortfolioResponse,
+        responses={404: {"model": ErrorResponse}},
+    )
+    async def get_portfolio(portfolio_id: UUID) -> PortfolioResponse:
+        portfolio = await portfolio_service.get(portfolio_id)
+        return PortfolioResponse.model_validate(portfolio)
+
+    @router.post(
+        "/{portfolio_id}/transactions",
+        response_model=TransactionResponse,
+        status_code=status.HTTP_201_CREATED,
+        responses={
+            404: {"model": ErrorResponse},
+            409: {"model": ErrorResponse},
+            422: {"model": ErrorResponse},
+        },
+    )
+    async def create_transaction(
+        portfolio_id: UUID,
+        request: TransactionInput,
+        response: Response,
+    ) -> TransactionResponse:
+        result = await transaction_service.create(
+            portfolio_id,
+            NewTransaction(
+                external_id=request.external_id,
+                transaction_type=request.transaction_type,
+                occurred_at=request.occurred_at,
+                symbol=request.symbol,
+                quantity=request.quantity,
+                unit_price=request.unit_price,
+                cash_amount=request.cash_amount,
+                fees=request.fees,
+            ),
+        )
+        if not result.created:
+            response.status_code = status.HTTP_200_OK
+        return TransactionResponse.model_validate(result.transaction)
+
+    @router.get(
+        "/{portfolio_id}/transactions",
+        response_model=list[TransactionResponse],
+        responses={404: {"model": ErrorResponse}},
+    )
+    async def list_transactions(portfolio_id: UUID) -> list[TransactionResponse]:
+        transactions = await transaction_service.list(portfolio_id)
+        return [
+            TransactionResponse.model_validate(transaction)
+            for transaction in transactions
+        ]
 
     @router.get(
         "/{portfolio_id}/analytics",

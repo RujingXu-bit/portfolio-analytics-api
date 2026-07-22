@@ -1,19 +1,21 @@
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import date, datetime
-from decimal import Decimal
+from datetime import UTC, date, datetime
+from decimal import Decimal, InvalidOperation
 from uuid import UUID, uuid4
 
 from portfolio_analytics_api.application.errors import (
     PortfolioAnalyticsUnavailableError,
     PortfolioNotFoundError,
+    TransactionIdempotencyConflictError,
 )
 from portfolio_analytics_api.application.ports import (
     MarketDataProvider,
-    PortfolioRepository,
+    UnitOfWorkFactory,
 )
 from portfolio_analytics_api.domain import (
     AnalyticsMethodology,
+    InvalidTransactionError,
     Portfolio,
     PortfolioAnalytics,
     Transaction,
@@ -22,7 +24,12 @@ from portfolio_analytics_api.domain import (
     calculate_max_drawdown,
     calculate_sharpe_ratio,
     calculate_simple_returns,
+    derive_positions,
+    validate_transaction,
 )
+
+_QUANTITY_QUANTUM = Decimal("0.000000000001")
+_MONEY_QUANTUM = Decimal("0.00000001")
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,51 +44,52 @@ class NewTransaction:
     fees: Decimal = Decimal("0")
 
 
+@dataclass(frozen=True, slots=True)
+class TransactionCreation:
+    transaction: Transaction
+    created: bool
+
+
 class PortfolioService:
     def __init__(
         self,
-        repository: PortfolioRepository,
+        unit_of_work_factory: UnitOfWorkFactory,
         id_factory: Callable[[], UUID] = uuid4,
     ) -> None:
-        self._repository = repository
+        self._unit_of_work_factory = unit_of_work_factory
         self._id_factory = id_factory
 
     async def create(
         self,
         name: str,
-        transactions: Sequence[NewTransaction],
+        base_currency: str,
     ) -> Portfolio:
-        portfolio_id = self._id_factory()
         portfolio = Portfolio(
-            id=portfolio_id,
+            id=self._id_factory(),
             name=name,
-            transactions=tuple(
-                Transaction(
-                    portfolio_id=portfolio_id,
-                    external_id=transaction.external_id,
-                    transaction_type=transaction.transaction_type,
-                    occurred_at=transaction.occurred_at,
-                    symbol=transaction.symbol,
-                    quantity=transaction.quantity,
-                    unit_price=transaction.unit_price,
-                    cash_amount=transaction.cash_amount,
-                    fees=transaction.fees,
-                )
-                for transaction in transactions
-            ),
+            base_currency=base_currency.strip().upper(),
         )
-        await self._repository.add(portfolio)
+        async with self._unit_of_work_factory() as unit_of_work:
+            await unit_of_work.portfolios.add(portfolio)
+            await unit_of_work.commit()
         return portfolio
+
+    async def get(self, portfolio_id: UUID) -> Portfolio:
+        async with self._unit_of_work_factory() as unit_of_work:
+            portfolio = await unit_of_work.portfolios.get(portfolio_id)
+            if portfolio is None:
+                raise PortfolioNotFoundError(portfolio_id)
+            return portfolio
 
 
 class PortfolioAnalyticsService:
     def __init__(
         self,
-        repository: PortfolioRepository,
+        unit_of_work_factory: UnitOfWorkFactory,
         market_data_provider: MarketDataProvider,
         methodology: AnalyticsMethodology,
     ) -> None:
-        self._repository = repository
+        self._unit_of_work_factory = unit_of_work_factory
         self._market_data_provider = market_data_provider
         self._methodology = methodology
 
@@ -96,20 +104,24 @@ class PortfolioAnalyticsService:
                 "start_date must not be after end_date"
             )
 
-        portfolio = await self._repository.get(portfolio_id)
-        if portfolio is None:
-            raise PortfolioNotFoundError(portfolio_id)
+        async with self._unit_of_work_factory() as unit_of_work:
+            portfolio = await unit_of_work.portfolios.get(portfolio_id)
+            if portfolio is None:
+                raise PortfolioNotFoundError(portfolio_id)
+            transactions = await unit_of_work.transactions.list_for_portfolio(
+                portfolio_id
+            )
 
         symbols = {
             transaction.symbol.upper()
-            for transaction in portfolio.transactions
+            for transaction in transactions
             if transaction.transaction_type
             in {TransactionType.BUY, TransactionType.SELL}
             and transaction.symbol is not None
         }
         if len(symbols) != 1:
             raise PortfolioAnalyticsUnavailableError(
-                "the W1.4 in-memory slice requires exactly one traded symbol"
+                "the current analytics scope requires exactly one traded symbol"
             )
         symbol = next(iter(symbols))
 
@@ -145,3 +157,135 @@ class PortfolioAnalyticsService:
             ),
             methodology=self._methodology,
         )
+
+
+class TransactionService:
+    def __init__(
+        self,
+        unit_of_work_factory: UnitOfWorkFactory,
+        id_factory: Callable[[], UUID] = uuid4,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._id_factory = id_factory
+        self._clock = clock
+
+    async def create(
+        self,
+        portfolio_id: UUID,
+        new_transaction: NewTransaction,
+    ) -> TransactionCreation:
+        transaction = _build_transaction(
+            portfolio_id=portfolio_id,
+            new_transaction=new_transaction,
+            transaction_id=self._id_factory(),
+            created_at=self._clock(),
+        )
+        validate_transaction(transaction)
+
+        async with self._unit_of_work_factory() as unit_of_work:
+            portfolio = await unit_of_work.portfolios.get_for_update(portfolio_id)
+            if portfolio is None:
+                raise PortfolioNotFoundError(portfolio_id)
+
+            existing = await unit_of_work.transactions.get_by_external_id(
+                portfolio_id, transaction.external_id
+            )
+            if existing is not None:
+                if _same_transaction_payload(existing, transaction):
+                    return TransactionCreation(transaction=existing, created=False)
+                raise TransactionIdempotencyConflictError(
+                    portfolio_id, transaction.external_id
+                )
+
+            ledger = await unit_of_work.transactions.list_for_portfolio(portfolio_id)
+            derive_positions((*ledger, transaction))
+            await unit_of_work.transactions.add(transaction)
+            await unit_of_work.commit()
+            return TransactionCreation(transaction=transaction, created=True)
+
+    async def list(self, portfolio_id: UUID) -> tuple[Transaction, ...]:
+        async with self._unit_of_work_factory() as unit_of_work:
+            portfolio = await unit_of_work.portfolios.get(portfolio_id)
+            if portfolio is None:
+                raise PortfolioNotFoundError(portfolio_id)
+            return await unit_of_work.transactions.list_for_portfolio(portfolio_id)
+
+
+def _build_transaction(
+    *,
+    portfolio_id: UUID,
+    new_transaction: NewTransaction,
+    transaction_id: UUID,
+    created_at: datetime,
+) -> Transaction:
+    normalized_symbol = (
+        new_transaction.symbol.strip().upper()
+        if new_transaction.symbol is not None
+        else None
+    )
+    occurred_at = new_transaction.occurred_at
+    if occurred_at.tzinfo is not None:
+        occurred_at = occurred_at.astimezone(UTC)
+    return Transaction(
+        id=transaction_id,
+        portfolio_id=portfolio_id,
+        external_id=new_transaction.external_id.strip(),
+        transaction_type=new_transaction.transaction_type,
+        occurred_at=occurred_at,
+        created_at=created_at,
+        symbol=normalized_symbol,
+        quantity=_quantize_exact(
+            new_transaction.quantity, _QUANTITY_QUANTUM, "quantity"
+        ),
+        unit_price=_quantize_exact(
+            new_transaction.unit_price, _MONEY_QUANTUM, "unit_price"
+        ),
+        cash_amount=_quantize_exact(
+            new_transaction.cash_amount, _MONEY_QUANTUM, "cash_amount"
+        ),
+        fees=_quantize_exact(new_transaction.fees, _MONEY_QUANTUM, "fees")
+        or Decimal("0.00000000"),
+    )
+
+
+def _same_transaction_payload(left: Transaction, right: Transaction) -> bool:
+    return (
+        left.portfolio_id,
+        left.external_id,
+        left.transaction_type,
+        left.occurred_at,
+        left.symbol,
+        left.quantity,
+        left.unit_price,
+        left.cash_amount,
+        left.fees,
+    ) == (
+        right.portfolio_id,
+        right.external_id,
+        right.transaction_type,
+        right.occurred_at,
+        right.symbol,
+        right.quantity,
+        right.unit_price,
+        right.cash_amount,
+        right.fees,
+    )
+
+
+def _quantize_exact(
+    value: Decimal | None,
+    quantum: Decimal,
+    field_name: str,
+) -> Decimal | None:
+    if value is None or not value.is_finite():
+        return value
+    try:
+        normalized = value.quantize(quantum)
+    except InvalidOperation as error:
+        raise InvalidTransactionError(
+            f"{field_name} exceeds supported precision"
+        ) from error
+    if normalized != value:
+        raise InvalidTransactionError(f"{field_name} exceeds supported scale")
+    return normalized

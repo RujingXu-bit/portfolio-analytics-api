@@ -92,17 +92,18 @@ The result also contains `as_of` and `AnalyticsMethodology`. An undefined
 metric is represented by `None`; return sequences used internally are empty
 when fewer than two prices are available.
 
-For the W1.4 analytics API, `simple_return` is the simple return from the first
+For the current analytics API, `simple_return` is the simple return from the first
 to the last adjusted-close observation inside the inclusive requested date
 range. `as_of` is the date of that last available observation, which may be
 earlier than the requested end date. Volatility and Sharpe ratio use all simple
 daily returns within the range; maximum drawdown uses all adjusted-close
 observations within the range.
 
-The in-memory vertical slice derives the market-data symbol from fixed BUY or
-SELL transactions and requires exactly one traded symbol. It does not yet
-derive multi-asset portfolio weights or transaction-time cash flows; those are
-part of the planned persistent transaction slice.
+The persistent analytics slice derives the market-data symbol from stored BUY
+or SELL transactions and requires exactly one traded symbol. DEPOSIT and
+WITHDRAWAL are persisted but do not alter the current price-return series. The
+API does not yet derive multi-asset weights or transaction-time cash flows;
+that work is tracked separately before concentration-based risk summaries.
 
 The analytics API reports historical measurements. It does not predict prices,
 guarantee returns, or provide automatic buy or sell advice.

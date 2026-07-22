@@ -1,8 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
-from uuid import UUID
+from uuid import UUID, uuid4
 
 
 class TransactionType(StrEnum):
@@ -30,13 +30,23 @@ class Transaction:
     unit_price: Decimal | None = None
     cash_amount: Decimal | None = None
     fees: Decimal = Decimal("0")
+    id: UUID = field(default_factory=uuid4)
+    created_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class Portfolio:
     id: UUID
     name: str
+    base_currency: str = "USD"
+    owner_id: UUID | None = None
     transactions: tuple[Transaction, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class Position:
+    symbol: str
+    quantity: Decimal
 
 
 class PriceBasis(StrEnum):
