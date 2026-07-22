@@ -20,6 +20,8 @@ services:
         sync: false
       - key: REDIS_URL
         sync: false
+      - key: MARKET_DATA_PROVIDER
+        value: yfinance
       - key: JWT_SECRET_KEY
         generateValue: true
       - key: RATE_LIMIT_HASH_KEY

@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     test_redis_url: str = "redis://localhost:56379/0"
     redis_connect_timeout_seconds: float = Field(default=1.0, gt=0)
     redis_read_timeout_seconds: float = Field(default=1.0, gt=0)
+    market_data_provider: Literal["yfinance", "twelve_data"] = "yfinance"
+    twelve_data_api_key: SecretStr | None = None
     market_data_request_timeout_seconds: float = Field(default=10.0, gt=0)
     market_data_operation_timeout_seconds: float = Field(default=12.0, gt=0)
     market_data_max_attempts: int = Field(default=3, ge=1)

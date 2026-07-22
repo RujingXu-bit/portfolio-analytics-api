@@ -11,6 +11,7 @@ def test_render_blueprint_uses_runtime_and_safe_secret_placeholders() -> None:
         "autoDeployTrigger: checksPass",
         "preDeployCommand: uv run alembic upgrade head",
         "healthCheckPath: /health",
+        "MARKET_DATA_PROVIDER",
         "RATE_LIMIT_TRUST_PROXY_HEADERS",
         "generateValue: true",
     ):

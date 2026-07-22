@@ -135,9 +135,10 @@ and must not be presented as capacity planning.
 
 ### What would you build next?
 
-The independent frontend and public deployment are accepted. The next
-evidence-led enhancements are a second market-data provider for availability
-and a preview-first CSV import with stable idempotency keys. A live dated
-risk-free-rate source and token revocation remain reasonable later additions.
+The independent frontend and public deployment are accepted. Twelve Data is now
+available as an explicitly configured second market-data provider; automatic
+failover is deliberately out of scope. The next evidence-led enhancement is a
+preview-first CSV import with stable idempotency keys. A live dated risk-free-
+rate source and token revocation remain reasonable later additions.
 Do not add prediction, automatic trading, or distributed infrastructure merely
 for architecture theater.

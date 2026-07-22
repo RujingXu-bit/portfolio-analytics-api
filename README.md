@@ -27,9 +27,9 @@ a deterministic offline fixture.
 A FastAPI modular monolith for recording portfolios and transactions, valuing
 multi-asset holdings, and returning deterministic, explainable historical risk
 analytics. PostgreSQL stores the owned transaction ledger, Redis caches market
-data and optional generated narratives, yfinance supplies adjusted-close
-history, and an optional DeepSeek adapter can explain metrics that the backend
-has already calculated.
+data and optional generated narratives, a configured yfinance or Twelve Data
+adapter supplies adjusted-close history, and an optional DeepSeek adapter can
+explain metrics that the backend has already calculated.
 
 This V1 does not predict prices, automate trades, or guarantee returns. The LLM
 never calculates or overrides financial metrics or the deterministic risk
@@ -53,8 +53,8 @@ HTTP client
   -> FastAPI validation and authentication
   -> application services (ownership + transaction boundaries)
        -> SQLAlchemy repositories -> PostgreSQL 16
-       -> market-data cache -> bounded retry -> observed yfinance adapter
-                               Redis 7
+       -> market-data cache -> bounded retry -> observed configured provider
+                               Redis 7         (yfinance or Twelve Data)
        -> deterministic domain valuation and metrics
        -> deterministic risk rules -> optional cached DeepSeek narrative
 ```
@@ -74,8 +74,9 @@ complete design and trade-offs.
 - Python 3.12; uv installs the pinned project version when needed
 
 No external API credential is required for installation, tests, health,
-authentication, or deterministic insights. Analytics in the running
-application use yfinance and therefore require internet access.
+authentication, or deterministic insights. Analytics require internet access.
+The default yfinance provider needs no key; the optional Twelve Data provider
+requires `TWELVE_DATA_API_KEY`.
 
 ## Clean installation and startup
 
@@ -121,8 +122,8 @@ Stop local services without deleting the PostgreSQL volume with
 After startup, `make demo` runs the complete API-driven V1 flow without
 manual database edits: registration/login, owned portfolio creation, DEPOSIT,
 idempotent BUY replay, analytics, and deterministic insight. The normal app's
-analytics call uses yfinance, so this live demo requires internet access. See
-the [three-minute talk track](docs/demo.md).
+analytics call uses the configured provider, so this live demo requires
+internet access. See the [three-minute talk track](docs/demo.md).
 
 ## Environment variables
 
@@ -141,7 +142,9 @@ Pydantic reads process variables first and a local `.env` second. Do not commit
 | `TEST_REDIS_URL` | `redis://localhost:56379/0` | Disposable test/benchmark Redis. |
 | `REDIS_CONNECT_TIMEOUT_SECONDS` | `1` | Redis connection timeout. |
 | `REDIS_READ_TIMEOUT_SECONDS` | `1` | Redis read timeout. |
-| `MARKET_DATA_REQUEST_TIMEOUT_SECONDS` | `10` | Timeout passed to one yfinance request. |
+| `MARKET_DATA_PROVIDER` | `yfinance` | Explicit provider selection: `yfinance` or `twelve_data`; there is no silent failover. |
+| `TWELVE_DATA_API_KEY` | empty | Required only when `MARKET_DATA_PROVIDER=twelve_data`; never logged or cached. |
+| `MARKET_DATA_REQUEST_TIMEOUT_SECONDS` | `10` | Timeout passed to one upstream provider request. |
 | `MARKET_DATA_OPERATION_TIMEOUT_SECONDS` | `12` | Deadline for the entire provider retry sequence. |
 | `MARKET_DATA_MAX_ATTEMPTS` | `3` | Maximum attempts for transient provider failures. |
 | `MARKET_DATA_RETRY_BACKOFF_SECONDS` | `0.25` | Initial exponential retry delay. |
